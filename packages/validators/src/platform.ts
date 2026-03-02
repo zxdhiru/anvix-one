@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { indianPhoneSchema, emailSchema } from './common';
+import { indianPhoneSchema, emailSchema } from './common.js';
 
 /** Schema for creating a new subscription plan */
 export const createPlanSchema = z.object({

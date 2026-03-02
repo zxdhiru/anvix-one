@@ -1,3 +1,3 @@
-export * from './currency';
-export * from './date';
-export * from './slug';
+export * from './currency.js';
+export * from './date.js';
+export * from './slug.js';

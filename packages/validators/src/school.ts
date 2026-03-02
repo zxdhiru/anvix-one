@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { indianPhoneSchema } from './common';
+import { indianPhoneSchema } from './common.js';
 
 /** Schema for creating a school user (teacher, staff, etc.) */
 export const createSchoolUserSchema = z.object({

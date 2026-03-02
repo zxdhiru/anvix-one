@@ -1,3 +1,3 @@
-export * from './platform';
-export * from './school';
-export * from './common';
+export * from './platform.js';
+export * from './school.js';
+export * from './common.js';
