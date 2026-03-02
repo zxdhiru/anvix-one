@@ -6,8 +6,14 @@ import { DatabaseService } from './database.service';
  * SQL for creating tenant-level tables inside a schema.
  * These replicate the Drizzle schemas in schema/school/ but as raw SQL
  * so they can be run dynamically inside any tenant schema.
+ *
+ * ORDER MATTERS — tables with foreign keys must come after their referenced tables.
  */
 const TENANT_TABLES_SQL = `
+  -- =========================================
+  -- Core tables (Phase 1)
+  -- =========================================
+
   CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(200) NOT NULL,
@@ -37,6 +43,254 @@ const TENANT_TABLES_SQL = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+
+  -- =========================================
+  -- Academic structure (Phase 2)
+  -- =========================================
+
+  CREATE TABLE IF NOT EXISTS academic_years (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(20) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    is_current BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS terms (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    academic_year_id UUID NOT NULL REFERENCES academic_years(id) ON DELETE CASCADE,
+    name VARCHAR(50) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    sort_order VARCHAR(5) NOT NULL DEFAULT '1',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- =========================================
+  -- RBAC (Phase 2)
+  -- =========================================
+
+  CREATE TABLE IF NOT EXISTS roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(50) NOT NULL UNIQUE,
+    display_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL UNIQUE,
+    module VARCHAR(50) NOT NULL,
+    action VARCHAR(20) NOT NULL,
+    description TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS role_permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS user_roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- =========================================
+  -- Classes & Subjects (Phase 2)
+  -- =========================================
+
+  CREATE TABLE IF NOT EXISTS classes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(30) NOT NULL,
+    numeric_order INT NOT NULL,
+    academic_year_id UUID NOT NULL REFERENCES academic_years(id) ON DELETE CASCADE,
+    class_teacher_id UUID,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS sections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+    name VARCHAR(10) NOT NULL,
+    capacity INT,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS subjects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(20),
+    subject_type VARCHAR(20) NOT NULL DEFAULT 'scholastic',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS class_subjects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+    subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    teacher_id UUID,
+    periods_per_week INT DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- =========================================
+  -- Students (Phase 2)
+  -- =========================================
+
+  CREATE TABLE IF NOT EXISTS students (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admission_number VARCHAR(30) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    date_of_birth DATE NOT NULL,
+    gender VARCHAR(10) NOT NULL,
+    blood_group VARCHAR(5),
+    category VARCHAR(20),
+    religion VARCHAR(30),
+    nationality VARCHAR(30) DEFAULT 'Indian',
+    aadhaar_number VARCHAR(12),
+    address TEXT,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    pincode VARCHAR(10),
+    class_id UUID NOT NULL REFERENCES classes(id),
+    section_id UUID NOT NULL REFERENCES sections(id),
+    roll_number INT,
+    admission_date DATE,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    photo_url VARCHAR(500),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS student_guardians (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    relation VARCHAR(30) NOT NULL,
+    phone VARCHAR(15) NOT NULL,
+    email VARCHAR(255),
+    occupation VARCHAR(100),
+    address TEXT,
+    is_primary BOOLEAN NOT NULL DEFAULT false,
+    user_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS student_class_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    class_id UUID NOT NULL REFERENCES classes(id),
+    section_id UUID NOT NULL REFERENCES sections(id),
+    academic_year_id UUID NOT NULL,
+    roll_number INT,
+    action VARCHAR(20) NOT NULL,
+    remarks TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- =========================================
+  -- Teachers (Phase 2)
+  -- =========================================
+
+  CREATE TABLE IF NOT EXISTS teachers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    employee_id VARCHAR(30),
+    qualification VARCHAR(200),
+    specialization VARCHAR(200),
+    experience_years INT DEFAULT 0,
+    date_of_joining VARCHAR(10),
+    designation VARCHAR(100),
+    is_class_teacher BOOLEAN NOT NULL DEFAULT false,
+    bio TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS teacher_subjects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    teacher_id UUID NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    subject_id UUID NOT NULL REFERENCES subjects(id),
+    class_id UUID NOT NULL REFERENCES classes(id),
+    section_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- =========================================
+  -- Seed default roles & permissions
+  -- =========================================
+
+  INSERT INTO roles (name, display_name, description) VALUES
+    ('school_admin', 'School Admin', 'Full access to all school modules'),
+    ('vice_principal', 'Vice Principal', 'Administrative access except billing'),
+    ('teacher', 'Teacher', 'Access to classes, students, attendance, exams'),
+    ('accountant', 'Accountant', 'Access to fee management and reports'),
+    ('staff', 'Staff', 'Limited access to assigned modules'),
+    ('parent', 'Parent', 'Read-only access to child data')
+  ON CONFLICT (name) DO NOTHING;
+
+  INSERT INTO permissions (name, module, action, description) VALUES
+    ('school_profile.manage', 'school_profile', 'manage', 'Manage school profile'),
+    ('users.read', 'users', 'read', 'View users'),
+    ('users.write', 'users', 'write', 'Create and edit users'),
+    ('users.delete', 'users', 'delete', 'Delete users'),
+    ('classes.read', 'classes', 'read', 'View classes and sections'),
+    ('classes.write', 'classes', 'write', 'Create and edit classes'),
+    ('subjects.read', 'subjects', 'read', 'View subjects'),
+    ('subjects.write', 'subjects', 'write', 'Create and edit subjects'),
+    ('students.read', 'students', 'read', 'View students'),
+    ('students.write', 'students', 'write', 'Create and edit students'),
+    ('students.delete', 'students', 'delete', 'Delete students'),
+    ('students.import', 'students', 'import', 'Bulk import students'),
+    ('teachers.read', 'teachers', 'read', 'View teachers'),
+    ('teachers.write', 'teachers', 'write', 'Create and edit teachers'),
+    ('attendance.read', 'attendance', 'read', 'View attendance'),
+    ('attendance.write', 'attendance', 'write', 'Mark attendance'),
+    ('fees.read', 'fees', 'read', 'View fee information'),
+    ('fees.write', 'fees', 'write', 'Manage fees'),
+    ('fees.collect', 'fees', 'collect', 'Collect fee payments'),
+    ('exams.read', 'exams', 'read', 'View exam and results'),
+    ('exams.write', 'exams', 'write', 'Manage exams and enter marks'),
+    ('reports.read', 'reports', 'read', 'View reports'),
+    ('communication.read', 'communication', 'read', 'View notices and messages'),
+    ('communication.write', 'communication', 'write', 'Create notices and messages')
+  ON CONFLICT (name) DO NOTHING;
+
+  -- Assign all permissions to school_admin
+  INSERT INTO role_permissions (role_id, permission_id)
+  SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+  WHERE r.name = 'school_admin'
+  ON CONFLICT DO NOTHING;
+
+  -- Teacher permissions
+  INSERT INTO role_permissions (role_id, permission_id)
+  SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+  WHERE r.name = 'teacher' AND p.name IN (
+    'classes.read', 'subjects.read', 'students.read',
+    'teachers.read', 'attendance.read', 'attendance.write',
+    'exams.read', 'exams.write', 'communication.read'
+  )
+  ON CONFLICT DO NOTHING;
+
+  -- Parent permissions
+  INSERT INTO role_permissions (role_id, permission_id)
+  SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+  WHERE r.name = 'parent' AND p.name IN (
+    'students.read', 'attendance.read', 'fees.read',
+    'exams.read', 'reports.read', 'communication.read'
+  )
+  ON CONFLICT DO NOTHING;
 `;
 
 @Injectable()
