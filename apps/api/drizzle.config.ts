@@ -7,6 +7,6 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ??
-      'postgresql://anvix:anvix_dev_password@localhost:5432/anvix_platform',
+      'postgresql://anvix:anvix_dev_password@localhost:5433/anvix_platform',
   },
 });

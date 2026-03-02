@@ -5,7 +5,15 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AcademicsService } from './academics.service';
-import type { SchoolProfileRow, AcademicYearRow, TermRow, ClassRow, SectionRow, SubjectRow, ClassSubjectRow } from './academics.service';
+import type {
+  SchoolProfileRow,
+  AcademicYearRow,
+  TermRow,
+  ClassRow,
+  SectionRow,
+  SubjectRow,
+  ClassSubjectRow,
+} from './academics.service';
 
 @Controller('school/academics')
 @UseGuards(TenantGuard, SubscriptionGuard, AuthGuard, RoleGuard)

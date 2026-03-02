@@ -47,11 +47,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const data = await apiClient('/school/auth/verify-otp', {
+      const data = (await apiClient('/school/auth/verify-otp', {
         method: 'POST',
         body: JSON.stringify({ phone, otp }),
         tenantSlug,
-      }) as { token: string; user: Record<string, unknown> };
+      })) as { token: string; user: Record<string, unknown> };
       localStorage.setItem('anvix_school_token', data.token);
       localStorage.setItem('anvix_school_user', JSON.stringify(data.user));
       router.push('/');
