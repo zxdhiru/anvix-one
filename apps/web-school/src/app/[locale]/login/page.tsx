@@ -5,15 +5,15 @@ import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 
-type Step = 'phone' | 'otp';
+type Step = 'email' | 'otp';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
   const common = useTranslations('common');
   const router = useRouter();
 
-  const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  const [step, setStep] = useState<Step>('email');
+  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,7 +30,7 @@ export default function LoginPage() {
     try {
       await apiClient('/school/auth/send-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ email }),
         tenantSlug,
       });
       setStep('otp');
@@ -49,7 +49,7 @@ export default function LoginPage() {
     try {
       const data = (await apiClient('/school/auth/verify-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone, otp }),
+        body: JSON.stringify({ email, otp }),
         tenantSlug,
       })) as { token: string; user: Record<string, unknown> };
       localStorage.setItem('anvix_school_token', data.token);
@@ -76,36 +76,38 @@ export default function LoginPage() {
           </div>
         )}
 
-        {step === 'phone' ? (
+        {step === 'email' ? (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div>
               <label
-                htmlFor="phone"
+                htmlFor="email"
                 className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
-                {t('phoneNumber')}
+                {t('email')}
               </label>
               <input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91XXXXXXXXXX"
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@school.com"
                 className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:ring-blue-900"
                 required
               />
             </div>
             <button
               type="submit"
-              disabled={loading || phone.length < 10}
+              disabled={loading || !email.includes('@')}
               className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? common('loading') : t('verifyOtp')}
+              {loading ? common('loading') : t('sendOtp')}
             </button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('otpSent')}</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {t('otpSent')} <strong>{email}</strong>
+            </p>
             <div>
               <label
                 htmlFor="otp"
@@ -135,7 +137,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => {
-                setStep('phone');
+                setStep('email');
                 setOtp('');
                 setError('');
               }}

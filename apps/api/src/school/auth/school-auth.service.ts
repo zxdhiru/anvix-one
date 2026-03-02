@@ -14,7 +14,7 @@ interface SchoolUserRow {
 }
 
 /**
- * School auth service — handles phone OTP login for school users.
+ * School auth service — handles email OTP login for school users.
  * Issues a simple JWT-like token (cryptographically signed).
  */
 @Injectable()
@@ -31,46 +31,46 @@ export class SchoolAuthService {
   }
 
   /**
-   * Step 1: Send OTP to the phone number.
+   * Step 1: Send OTP to the user's email address.
    * Verifies the user exists in this tenant before sending.
    */
-  async sendOtp(phone: string): Promise<{ message: string }> {
+  async sendOtp(email: string): Promise<{ message: string }> {
     const { rows } = await this.tenantConnection.query<SchoolUserRow>(
-      `SELECT id, name, phone, role, is_active FROM users WHERE phone = $1 LIMIT 1`,
-      [phone],
+      `SELECT id, name, email, phone, role, is_active FROM users WHERE email = $1 LIMIT 1`,
+      [email],
     );
 
     if (rows.length === 0) {
-      throw new NotFoundException('No user found with this phone number');
+      throw new NotFoundException('No user found with this email address');
     }
 
     if (!rows[0].is_active) {
       throw new UnauthorizedException('Your account has been deactivated');
     }
 
-    await this.otpService.generateOtp(phone);
+    await this.otpService.generateOtp(email, rows[0].email ?? email);
 
-    return { message: 'OTP sent successfully' };
+    return { message: 'OTP sent to your email' };
   }
 
   /**
    * Step 2: Verify OTP and issue token.
    */
   async verifyOtp(
-    phone: string,
+    email: string,
     otp: string,
   ): Promise<{
     token: string;
     user: { id: string; name: string; phone: string; email: string | null; role: string };
   }> {
-    const isValid = await this.otpService.verifyOtp(phone, otp);
+    const isValid = await this.otpService.verifyOtp(email, otp);
     if (!isValid) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
     const { rows } = await this.tenantConnection.query<SchoolUserRow>(
-      `SELECT id, name, phone, email, role, is_active FROM users WHERE phone = $1 LIMIT 1`,
-      [phone],
+      `SELECT id, name, phone, email, role, is_active FROM users WHERE email = $1 LIMIT 1`,
+      [email],
     );
 
     if (rows.length === 0) {

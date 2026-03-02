@@ -20,12 +20,14 @@
   "auth": {
     "login": "Login",
     "logout": "Logout",
+    "email": "Email Address",
     "phoneNumber": "Phone Number",
     "enterOtp": "Enter OTP",
+    "sendOtp": "Send OTP",
     "verifyOtp": "Verify OTP",
     "resendOtp": "Resend OTP",
     "invalidOtp": "Invalid OTP. Please try again.",
-    "otpSent": "OTP sent to your phone number",
+    "otpSent": "OTP sent to",
     "welcomeBack": "Welcome back!"
   },
   "dashboard": {

@@ -4,6 +4,7 @@ import { DatabaseService } from './database.service';
 import { TenantDatabaseService } from './tenant-database.service';
 import { TenantConnectionService } from './tenant-connection.service';
 import { RedisService } from './redis.service';
+import { MailService } from './mail.service';
 
 @Global()
 @Module({
@@ -19,7 +20,14 @@ import { RedisService } from './redis.service';
     TenantDatabaseService,
     TenantConnectionService,
     RedisService,
+    MailService,
   ],
-  exports: [DatabaseService, TenantDatabaseService, TenantConnectionService, RedisService],
+  exports: [
+    DatabaseService,
+    TenantDatabaseService,
+    TenantConnectionService,
+    RedisService,
+    MailService,
+  ],
 })
 export class DatabaseModule {}

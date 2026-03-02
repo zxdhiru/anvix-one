@@ -10,11 +10,11 @@ export class SchoolAuthController {
 
   /**
    * POST /api/school/auth/send-otp
-   * Send OTP to a phone number registered in this tenant.
+   * Send OTP to the email address registered in this tenant.
    */
   @Post('send-otp')
-  async sendOtp(@Body() body: { phone: string }) {
-    return this.authService.sendOtp(body.phone);
+  async sendOtp(@Body() body: { email: string }) {
+    return this.authService.sendOtp(body.email);
   }
 
   /**
@@ -22,7 +22,7 @@ export class SchoolAuthController {
    * Verify OTP and receive an auth token.
    */
   @Post('verify-otp')
-  async verifyOtp(@Body() body: { phone: string; otp: string }) {
-    return this.authService.verifyOtp(body.phone, body.otp);
+  async verifyOtp(@Body() body: { email: string; otp: string }) {
+    return this.authService.verifyOtp(body.email, body.otp);
   }
 }

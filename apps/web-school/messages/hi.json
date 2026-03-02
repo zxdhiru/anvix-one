@@ -20,12 +20,14 @@
   "auth": {
     "login": "लॉगिन",
     "logout": "लॉगआउट",
+    "email": "ईमेल पता",
     "phoneNumber": "फ़ोन नंबर",
     "enterOtp": "OTP दर्ज करें",
+    "sendOtp": "OTP भेजें",
     "verifyOtp": "OTP सत्यापित करें",
     "resendOtp": "OTP पुनः भेजें",
     "invalidOtp": "अमान्य OTP। कृपया पुनः प्रयास करें।",
-    "otpSent": "आपके फ़ोन नंबर पर OTP भेजा गया",
+    "otpSent": "OTP भेजा गया",
     "welcomeBack": "वापसी पर स्वागत है!"
   },
   "dashboard": {
