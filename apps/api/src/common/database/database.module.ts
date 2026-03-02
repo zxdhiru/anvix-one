@@ -2,6 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from './database.service';
 import { TenantDatabaseService } from './tenant-database.service';
+import { RedisService } from './redis.service';
 
 @Global()
 @Module({
@@ -15,7 +16,8 @@ import { TenantDatabaseService } from './tenant-database.service';
       inject: [ConfigService],
     },
     TenantDatabaseService,
+    RedisService,
   ],
-  exports: [DatabaseService, TenantDatabaseService],
+  exports: [DatabaseService, TenantDatabaseService, RedisService],
 })
 export class DatabaseModule {}

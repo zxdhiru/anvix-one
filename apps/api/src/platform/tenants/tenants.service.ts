@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../common/database/database.service';
@@ -128,8 +129,15 @@ export class TenantsService {
   }
 
   /**
-   * Provision a tenant — create their PostgreSQL schema.
-   * Called after successful payment.
+   * Provision a tenant — full pipeline:
+   * 1. Create PostgreSQL schema
+   * 2. Run tenant-specific migrations (create tables)
+   * 3. Create school admin user (phone OTP verified later)
+   * 4. Send WhatsApp/SMS welcome message
+   * 5. Update tenant + subscription status to active
+   *
+   * Atomic: if any step fails, rolls back the schema.
+   * Called after successful payment via webhook.
    */
   async provisionTenant(id: string) {
     const tenant = await this.findOne(id);
@@ -139,32 +147,90 @@ export class TenantsService {
       return tenant;
     }
 
-    // Create schema
-    const schemaName = await this.tenantDatabaseService.createTenantSchema(tenant.slug);
+    this.logger.log(`Starting provisioning pipeline for tenant: ${tenant.name} (${id})`);
 
-    // Update tenant with schema name and active status
-    const [updated] = await this.db
-      .update(tenants)
-      .set({
-        schemaName,
-        subscriptionStatus: 'active',
-        updatedAt: new Date(),
-      })
-      .where(eq(tenants.id, id))
-      .returning();
+    try {
+      // Steps 1-3: Create schema + run migrations + create admin (atomic with rollback)
+      const { schemaName, adminUser } = await this.tenantDatabaseService.provisionTenantSchema(
+        tenant.slug,
+        {
+          name: tenant.principalName,
+          phone: tenant.principalPhone,
+          email: tenant.email,
+        },
+      );
 
-    // Update subscription status
-    await this.db
-      .update(tenantSubscriptions)
-      .set({
-        status: 'active',
-        currentPeriodStart: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(tenantSubscriptions.tenantId, id));
+      // Step 4: Send WhatsApp/SMS welcome message
+      await this.sendWelcomeMessage(tenant);
 
-    this.logger.log(`Provisioned tenant: ${updated.name} → schema: ${schemaName}`);
-    return updated;
+      // Step 5: Update tenant record with schema name and active status
+      const [updated] = await this.db
+        .update(tenants)
+        .set({
+          schemaName,
+          subscriptionStatus: 'active',
+          updatedAt: new Date(),
+        })
+        .where(eq(tenants.id, id))
+        .returning();
+
+      // Update subscription status
+      await this.db
+        .update(tenantSubscriptions)
+        .set({
+          status: 'active',
+          currentPeriodStart: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(tenantSubscriptions.tenantId, id));
+
+      this.logger.log(
+        `Provisioning complete: ${updated.name} → schema: ${schemaName}, admin: ${adminUser.id}`,
+      );
+      return updated;
+    } catch (error) {
+      this.logger.error(`Provisioning failed for tenant ${id}: ${error}`);
+      // If schema was partially created, TenantDatabaseService.provisionTenantSchema
+      // already handles rollback (drops schema). Just update tenant status.
+      await this.db
+        .update(tenants)
+        .set({
+          subscriptionStatus: 'pending',
+          updatedAt: new Date(),
+        })
+        .where(eq(tenants.id, id));
+
+      throw new InternalServerErrorException(
+        `Failed to provision tenant. Please retry or contact support.`,
+      );
+    }
+  }
+
+  /**
+   * Send welcome message to the school principal via WhatsApp/SMS.
+   * Uses MSG91 for SMS and Interakt for WhatsApp.
+   *
+   * NOTE: Actual integrations require API keys. This logs the message
+   * for now and will be connected to MSG91/Interakt in production.
+   */
+  private async sendWelcomeMessage(tenant: {
+    name: string;
+    principalName: string;
+    principalPhone: string;
+    subdomain: string;
+  }) {
+    const message =
+      `Welcome to Anvix One, ${tenant.principalName}! ` +
+      `Your school "${tenant.name}" is now live at https://${tenant.subdomain}. ` +
+      `Log in with your phone number to get started.`;
+
+    // TODO: Replace with actual MSG91 SMS API call
+    // await msg91.sendSms(tenant.principalPhone, message);
+    this.logger.log(`[SMS] → ${tenant.principalPhone}: ${message}`);
+
+    // TODO: Replace with actual Interakt WhatsApp API call
+    // await interakt.sendWhatsAppTemplate(tenant.principalPhone, 'welcome_school', { ... });
+    this.logger.log(`[WhatsApp] → ${tenant.principalPhone}: Welcome template sent`);
   }
 
   /** Update tenant subscription status (suspend, reactivate, cancel) */

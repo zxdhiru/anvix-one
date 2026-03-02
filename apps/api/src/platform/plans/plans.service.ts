@@ -82,14 +82,32 @@ export class PlansService {
   async update(id: string, dto: UpdatePlanDto) {
     await this.findOne(id); // Ensure exists
 
+    // Separate features from plan fields
+    const { features, ...planFields } = dto;
+
     const [updated] = await this.db
       .update(plans)
       .set({
-        ...dto,
+        ...planFields,
         updatedAt: new Date(),
       })
       .where(eq(plans.id, id))
       .returning();
+
+    // Update features if provided: delete old ones and insert new
+    if (features !== undefined) {
+      await this.db.delete(planFeatures).where(eq(planFeatures.planId, id));
+
+      if (features.length > 0) {
+        await this.db.insert(planFeatures).values(
+          features.map((feature) => ({
+            planId: id,
+            featureKey: feature,
+            featureValue: 'true',
+          })),
+        );
+      }
+    }
 
     this.logger.log(`Updated plan: ${updated.name} (${updated.id})`);
     return updated;

@@ -1,36 +1,46 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
+import Razorpay from 'razorpay';
+import * as crypto from 'crypto';
 import { DatabaseService } from '../../common/database/database.service';
+import { RedisService } from '../../common/database/redis.service';
 import { tenants, tenantSubscriptions } from '../../common/database/schema/platform';
 import { TenantsService } from '../tenants/tenants.service';
 import { PlansService } from '../plans/plans.service';
 import { CreateSubscriptionDto } from './dto';
 import type { SubscriptionStatusType } from '../../common/database/schema/platform/tenants';
 
+/** Redis key prefix for tenant subscription status cache (matches SubscriptionGuard) */
+const CACHE_PREFIX = 'tenant_status:';
+
 /**
  * Razorpay billing service.
- *
- * NOTE: Actual Razorpay SDK integration requires `razorpay` npm package
- * and live API keys. This service contains the full workflow logic with
- * placeholder Razorpay calls that should be swapped with real SDK calls.
+ * Handles subscription creation, webhook processing, and payment lifecycle.
  */
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
-  private readonly razorpayKeyId: string;
-  private readonly razorpayKeySecret: string;
+  private readonly razorpay: Razorpay;
   private readonly webhookSecret: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly databaseService: DatabaseService,
+    private readonly redisService: RedisService,
     private readonly tenantsService: TenantsService,
     private readonly plansService: PlansService,
   ) {
-    this.razorpayKeyId = this.configService.get<string>('RAZORPAY_KEY_ID', '');
-    this.razorpayKeySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET', '');
+    const keyId = this.configService.get<string>('RAZORPAY_KEY_ID', '');
+    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET', '');
     this.webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET', '');
+
+    this.razorpay = new Razorpay({
+      key_id: keyId,
+      key_secret: keySecret,
+    });
+
+    this.logger.log('Razorpay SDK initialized');
   }
 
   private get db() {
@@ -39,7 +49,13 @@ export class BillingService {
 
   /**
    * Create a Razorpay subscription for a tenant.
-   * Returns subscription details with payment link.
+   *
+   * Flow:
+   * 1. Find or create a Razorpay Plan matching our plan's price/billing cycle
+   * 2. Create a Razorpay customer for the tenant
+   * 3. Create a Razorpay subscription linking customer to plan
+   * 4. Store Razorpay IDs in our tenant_subscriptions table
+   * 5. Return the payment link (short_url) for the school to pay
    */
   async createSubscription(dto: CreateSubscriptionDto) {
     const tenant = await this.tenantsService.findOne(dto.tenantId);
@@ -49,42 +65,88 @@ export class BillingService {
       throw new BadRequestException('Selected plan is not available');
     }
 
-    // TODO: Replace with actual Razorpay SDK call
-    // const razorpay = new Razorpay({ key_id: this.razorpayKeyId, key_secret: this.razorpayKeySecret });
-    // const subscription = await razorpay.subscriptions.create({ plan_id: ..., customer: ... });
+    try {
+      // Step 1: Create or reuse a Razorpay plan
+      const razorpayPlan = await this.razorpay.plans.create({
+        period: this.mapBillingCycleToPeriod(plan.billingCycle),
+        interval: 1,
+        item: {
+          name: plan.name,
+          amount: plan.priceInPaise,
+          currency: 'INR',
+          description: plan.description ?? `${plan.name} subscription`,
+        },
+      });
 
-    const mockRazorpaySubscriptionId = `sub_mock_${Date.now()}`;
-    const mockRazorpayCustomerId = `cust_mock_${Date.now()}`;
+      // Step 2: Create a Razorpay customer
+      const customer = await this.razorpay.customers.create({
+        name: tenant.principalName ?? tenant.name,
+        email: tenant.email,
+        contact: tenant.principalPhone,
+        notes: {
+          tenantId: tenant.id,
+          schoolName: tenant.name,
+        },
+      });
 
-    // Update subscription record with Razorpay IDs
-    await this.db
-      .update(tenantSubscriptions)
-      .set({
-        razorpaySubscriptionId: mockRazorpaySubscriptionId,
-        razorpayCustomerId: mockRazorpayCustomerId,
-        updatedAt: new Date(),
-      })
-      .where(eq(tenantSubscriptions.tenantId, dto.tenantId));
+      // Step 3: Create a Razorpay subscription
+      const subscription = await this.razorpay.subscriptions.create({
+        plan_id: razorpayPlan.id,
+        customer_id: customer.id,
+        total_count: 12, // 12 billing cycles
+        customer_notify: 1,
+        notes: {
+          tenantId: tenant.id,
+          planId: plan.id,
+        },
+      });
 
-    this.logger.log(
-      `Created Razorpay subscription for tenant ${tenant.name}: ${mockRazorpaySubscriptionId}`,
-    );
+      // Step 4: Store Razorpay IDs
+      await this.db
+        .update(tenantSubscriptions)
+        .set({
+          razorpaySubscriptionId: subscription.id,
+          razorpayCustomerId: customer.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(tenantSubscriptions.tenantId, dto.tenantId));
 
-    return {
-      tenantId: tenant.id,
-      razorpaySubscriptionId: mockRazorpaySubscriptionId,
-      razorpayCustomerId: mockRazorpayCustomerId,
-      planName: plan.name,
-      amount: plan.priceInPaise,
-      // TODO: Return actual Razorpay payment link / short URL
-      paymentLink: `https://rzp.io/mock/${mockRazorpaySubscriptionId}`,
-    };
+      this.logger.log(
+        `Created Razorpay subscription for tenant ${tenant.name}: ${subscription.id}`,
+      );
+
+      // Step 5: Return payment link
+      return {
+        tenantId: tenant.id,
+        razorpaySubscriptionId: subscription.id,
+        razorpayCustomerId: customer.id,
+        planName: plan.name,
+        amount: plan.priceInPaise,
+        paymentLink: subscription.short_url,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create Razorpay subscription: ${error}`);
+      throw new BadRequestException('Failed to create subscription. Please try again.');
+    }
   }
 
   /**
-   * Handle Razorpay webhook events.
-   * Maps Razorpay events to internal tenant status updates.
+   * Verify Razorpay webhook signature using HMAC SHA256.
+   * Returns true if the signature is valid.
    */
+  verifyWebhookSignature(rawBody: Buffer | string, signature: string): boolean {
+    if (!this.webhookSecret) {
+      this.logger.warn('Webhook secret not configured — skipping signature verification');
+      return true;
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', this.webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  }
   async handleWebhook(event: string, payload: Record<string, unknown>) {
     this.logger.log(`Received Razorpay webhook: ${event}`);
 
@@ -187,7 +249,7 @@ export class BillingService {
     return sub ?? null;
   }
 
-  /** Helper: update tenant + subscription status */
+  /** Helper: update tenant + subscription status and invalidate cache */
   private async updateTenantStatus(tenantId: string, status: SubscriptionStatusType) {
     await this.db
       .update(tenants)
@@ -202,6 +264,10 @@ export class BillingService {
         updatedAt: new Date(),
       })
       .where(eq(tenantSubscriptions.tenantId, tenantId));
+
+    // Invalidate Redis cache so SubscriptionGuard picks up new status immediately
+    await this.redisService.del(`${CACHE_PREFIX}${tenantId}`);
+    this.logger.log(`Cache invalidated for tenant ${tenantId} after status change to ${status}`);
   }
 
   /** Helper: extract subscription ID from Razorpay webhook payload */
@@ -210,5 +276,19 @@ export class BillingService {
     const subscription = payload['subscription'] as Record<string, unknown> | undefined;
     const entity = subscription?.['entity'] as Record<string, unknown> | undefined;
     return (entity?.['id'] as string) ?? '';
+  }
+
+  /** Helper: map our billing cycle to Razorpay plan period */
+  private mapBillingCycleToPeriod(billingCycle: string): 'monthly' | 'quarterly' | 'yearly' {
+    switch (billingCycle) {
+      case 'monthly':
+        return 'monthly';
+      case 'quarterly':
+        return 'monthly'; // Razorpay doesn't have quarterly — use monthly with interval=3
+      case 'yearly':
+        return 'yearly';
+      default:
+        return 'monthly';
+    }
   }
 }

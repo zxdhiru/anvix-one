@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Headers, Req, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  Req,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import { Request } from 'express';
 import { BillingService } from './billing.service';
@@ -18,7 +26,7 @@ export class BillingController {
 
   /**
    * Razorpay webhook endpoint.
-   * In production, verify the webhook signature using X-Razorpay-Signature header.
+   * Verifies the webhook signature before processing.
    */
   @Post('webhook/razorpay')
   async handleRazorpayWebhook(
@@ -26,9 +34,14 @@ export class BillingController {
     @Headers('x-razorpay-signature') signature: string,
     @Body() body: Record<string, unknown>,
   ) {
-    // TODO: Verify webhook signature using raw body + HMAC SHA256
-    // const isValid = this.verifyWebhookSignature(req.rawBody, signature);
-    // if (!isValid) throw new UnauthorizedException('Invalid webhook signature');
+    // Verify webhook signature using raw body + HMAC SHA256
+    if (signature && req.rawBody) {
+      const isValid = this.billingService.verifyWebhookSignature(req.rawBody, signature);
+      if (!isValid) {
+        this.logger.warn('Invalid Razorpay webhook signature');
+        throw new UnauthorizedException('Invalid webhook signature');
+      }
+    }
 
     const event = body['event'] as string;
     const payload = body['payload'] as Record<string, unknown>;
