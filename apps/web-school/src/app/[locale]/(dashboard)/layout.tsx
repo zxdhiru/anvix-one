@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { apiClient } from '@/lib/api';
 import { Sidebar } from '@/components/sidebar';
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
+  const { user, token, tenantSlug, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const [checkingSetup, setCheckingSetup] = useState(true);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -15,7 +18,38 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, user, router]);
 
-  if (isLoading) {
+  // Check if school needs setup (no profile yet)
+  useEffect(() => {
+    if (!user || !tenantSlug) {
+      setCheckingSetup(false);
+      return;
+    }
+
+    // Don't redirect if already on setup page
+    if (pathname.includes('/setup')) {
+      setCheckingSetup(false);
+      return;
+    }
+
+    apiClient('/school/academics/profile', {
+      tenantSlug,
+      token: token ?? undefined,
+    })
+      .then((profile) => {
+        // If no profile or profile name is empty, redirect to setup
+        if (!profile || !profile.name) {
+          router.push('/setup');
+        }
+        setCheckingSetup(false);
+      })
+      .catch(() => {
+        // Profile doesn't exist => needs setup
+        router.push('/setup');
+        setCheckingSetup(false);
+      });
+  }, [user, tenantSlug, token, router, pathname]);
+
+  if (isLoading || checkingSetup) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />

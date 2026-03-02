@@ -86,6 +86,25 @@ export class TenantsService {
     };
   }
 
+  /**
+   * Register AND immediately provision a tenant (dev/demo mode).
+   * Combines register + provision into a single call, skipping payment.
+   */
+  async registerAndProvision(dto: RegisterTenantDto) {
+    // Step 1: Register
+    const { tenant, subscription } = await this.register(dto);
+
+    // Step 2: Provision immediately (skip payment)
+    const provisioned = await this.provisionTenant(tenant.id);
+
+    return {
+      tenant: provisioned,
+      subscription,
+      loginUrl: `http://localhost:3002/en/login?school=${provisioned.slug}`,
+      message: `School "${tenant.name}" is ready! Log in with email: ${tenant.email}`,
+    };
+  }
+
   /** Get all tenants with optional status filter */
   async findAll(status?: SubscriptionStatusType) {
     if (status) {

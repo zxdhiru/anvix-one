@@ -2,35 +2,46 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Request } from 'express';
 
 /**
- * Guard that resolves the tenant from request and validates subscription.
- * Phase 0: Skeleton only — full implementation in Phase 1.
+ * Guard that resolves the tenant slug from the request.
+ * Extracts from x-tenant-slug header or subdomain.
+ * Attaches tenantId (slug) to request for downstream use.
  */
 @Injectable()
 export class TenantGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const tenantId = this.extractTenantId(request);
+    const tenantSlug = this.extractTenantSlug(request);
 
-    if (!tenantId) {
-      throw new ForbiddenException('Tenant not identified');
+    if (!tenantSlug) {
+      throw new ForbiddenException('Tenant not identified. Send x-tenant-slug header.');
     }
 
-    // Attach tenantId to request for downstream use
-    (request as unknown as Record<string, unknown>)['tenantId'] = tenantId;
+    // Attach tenantId (slug) to request for downstream use
+    (request as unknown as Record<string, unknown>)['tenantId'] = tenantSlug;
 
     return true;
   }
 
-  private extractTenantId(request: Request): string | undefined {
-    // Priority 1: x-tenant-id header (for API calls)
+  private extractTenantSlug(request: Request): string | undefined {
+    // Priority 1: x-tenant-slug header (from frontend)
+    const slug = request.headers['x-tenant-slug'] as string | undefined;
+    if (slug) return slug;
+
+    // Priority 2: x-tenant-id header (backwards compat)
     const headerTenantId = request.headers['x-tenant-id'] as string | undefined;
     if (headerTenantId) return headerTenantId;
 
-    // Priority 2: Subdomain extraction (for browser requests)
+    // Priority 3: Subdomain extraction (for browser requests)
     const host = request.headers.host;
     if (host) {
       const subdomain = host.split('.')[0];
-      if (subdomain && subdomain !== 'admin' && subdomain !== 'www' && subdomain !== 'api') {
+      if (
+        subdomain &&
+        subdomain !== 'admin' &&
+        subdomain !== 'www' &&
+        subdomain !== 'api' &&
+        subdomain !== 'localhost'
+      ) {
         return subdomain;
       }
     }

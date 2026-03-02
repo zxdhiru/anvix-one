@@ -1,12 +1,57 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/lib/auth';
+import { apiClient } from '@/lib/api';
+
+interface DashboardStats {
+  totalStudents: number;
+  totalTeachers: number;
+  totalClasses: number;
+  totalSubjects: number;
+}
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
-  const { user } = useAuth();
+  const { user, token, tenantSlug } = useAuth();
   const role = user?.role ?? 'school_admin';
+
+  const [stats, setStats] = useState<DashboardStats>({
+    totalStudents: 0,
+    totalTeachers: 0,
+    totalClasses: 0,
+    totalSubjects: 0,
+  });
+  const [schoolName, setSchoolName] = useState('');
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    if (!tenantSlug) return;
+
+    const opts = { tenantSlug, token: token ?? undefined };
+
+    // Fetch all data in parallel
+    Promise.all([
+      apiClient('/school/academics/profile', opts).catch(() => null),
+      apiClient('/school/academics/classes', opts).catch(() => []),
+      apiClient('/school/academics/subjects', opts).catch(() => []),
+      apiClient('/school/users?role=student', opts).catch(() => []),
+      apiClient('/school/users?role=teacher', opts).catch(() => []),
+    ])
+      .then(([profile, classes, subjects, students, teachers]) => {
+        setSchoolName(profile?.name ?? '');
+        setStats({
+          totalStudents: Array.isArray(students) ? students.length : 0,
+          totalTeachers: Array.isArray(teachers) ? teachers.length : 0,
+          totalClasses: Array.isArray(classes) ? classes.length : 0,
+          totalSubjects: Array.isArray(subjects) ? subjects.length : 0,
+        });
+      })
+      .finally(() => setLoadingStats(false));
+  }, [tenantSlug, token]);
+
+  const displayName = schoolName || user?.phone || '';
 
   return (
     <div className="space-y-6">
@@ -14,24 +59,44 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{t('title')}</h1>
         <p className="mt-1 text-zinc-500 dark:text-zinc-400">
-          {t('welcome', { name: user?.phone ?? '' })}
+          {t('welcome', { name: displayName })}
         </p>
       </div>
 
       {/* Stats grid — admin & vice_principal */}
       {(role === 'school_admin' || role === 'vice_principal') && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label={t('totalStudents')} value="—" color="blue" />
-          <StatCard label={t('totalTeachers')} value="—" color="green" />
-          <StatCard label={t('attendance')} value="—" color="amber" />
-          <StatCard label={t('feeCollection')} value="—" color="purple" />
+          <StatCard
+            label={t('totalStudents')}
+            value={loadingStats ? '...' : String(stats.totalStudents)}
+            color="blue"
+          />
+          <StatCard
+            label={t('totalTeachers')}
+            value={loadingStats ? '...' : String(stats.totalTeachers)}
+            color="green"
+          />
+          <StatCard
+            label="Total Classes"
+            value={loadingStats ? '...' : String(stats.totalClasses)}
+            color="amber"
+          />
+          <StatCard
+            label="Total Subjects"
+            value={loadingStats ? '...' : String(stats.totalSubjects)}
+            color="purple"
+          />
         </div>
       )}
 
       {/* Teacher view */}
       {role === 'teacher' && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard label={t('totalStudents')} value="—" color="blue" />
+          <StatCard
+            label={t('totalStudents')}
+            value={loadingStats ? '...' : String(stats.totalStudents)}
+            color="blue"
+          />
           <StatCard label={t('attendance')} value="—" color="amber" />
           <StatCard label={t('upcomingEvents')} value="—" color="green" />
         </div>

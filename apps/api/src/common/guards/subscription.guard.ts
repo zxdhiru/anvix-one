@@ -88,11 +88,12 @@ export class SubscriptionGuard implements CanActivate {
       }
     }
 
-    // Query database
+    // Query database — tenantId may be a UUID or a slug
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
     const [tenant] = await this.databaseService.db
       .select({ subscriptionStatus: tenants.subscriptionStatus })
       .from(tenants)
-      .where(eq(tenants.id, tenantId))
+      .where(isUuid ? eq(tenants.id, tenantId) : eq(tenants.slug, tenantId))
       .limit(1);
 
     if (!tenant) return null;

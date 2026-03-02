@@ -22,6 +22,16 @@ export class TenantsController {
     return this.tenantsService.register(dto);
   }
 
+  /**
+   * POST /api/platform/tenants/register-and-provision
+   * Register a tenant AND auto-provision (dev/demo mode — skips payment).
+   * Returns the tenant + subscription + admin user + login URL.
+   */
+  @Post('register-and-provision')
+  registerAndProvision(@Body() dto: RegisterTenantDto) {
+    return this.tenantsService.registerAndProvision(dto);
+  }
+
   @Get()
   findAll(@Query('status') status?: SubscriptionStatusType) {
     return this.tenantsService.findAll(status);

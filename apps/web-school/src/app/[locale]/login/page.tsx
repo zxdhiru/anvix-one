@@ -1,16 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { AuthProvider } from '@/lib/auth';
 
 type Step = 'email' | 'otp';
 
-export default function LoginPage() {
+function LoginForm() {
   const t = useTranslations('auth');
   const common = useTranslations('common');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { login: authLogin, setTenantSlug } = useAuth();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -18,9 +22,19 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // In a real app, tenant slug comes from subdomain or URL
-  const tenantSlug =
-    typeof window !== 'undefined' ? window.location.hostname.split('.')[0] : 'demo';
+  // Get tenant slug from query param, localStorage, or fallback
+  const [tenantSlug, setTenantSlugLocal] = useState('demo-school');
+
+  useEffect(() => {
+    const fromQuery = searchParams.get('school');
+    const fromStorage = localStorage.getItem('anvix_tenant_slug');
+    if (fromQuery) {
+      setTenantSlugLocal(fromQuery);
+      setTenantSlug(fromQuery);
+    } else if (fromStorage) {
+      setTenantSlugLocal(fromStorage);
+    }
+  }, [searchParams, setTenantSlug]);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +65,21 @@ export default function LoginPage() {
         method: 'POST',
         body: JSON.stringify({ email, otp }),
         tenantSlug,
-      })) as { token: string; user: Record<string, unknown> };
-      localStorage.setItem('anvix_school_token', data.token);
-      localStorage.setItem('anvix_school_user', JSON.stringify(data.user));
+      })) as {
+        token: string;
+        user: { id: string; name: string; phone: string; email: string | null; role: string };
+      };
+
+      authLogin(
+        data.token,
+        {
+          userId: data.user.id,
+          phone: data.user.phone || data.user.email || '',
+          role: data.user.role,
+          tenantSchema: `tenant_${tenantSlug.replace(/[^a-z0-9_]/g, '_')}`,
+        },
+        tenantSlug,
+      );
       router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('invalidOtp'));
@@ -68,6 +94,11 @@ export default function LoginPage() {
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{common('appName')}</h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('login')}</p>
+          {tenantSlug && (
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+              School: <span className="font-medium">{tenantSlug}</span>
+            </p>
+          )}
         </div>
 
         {error && (
@@ -149,5 +180,13 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <AuthProvider>
+      <LoginForm />
+    </AuthProvider>
   );
 }

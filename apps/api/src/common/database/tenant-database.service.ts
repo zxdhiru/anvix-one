@@ -348,7 +348,7 @@ export class TenantDatabaseService {
     try {
       await client.query(`SET search_path TO "${schemaName}"`);
       const result = await client.query(
-        `INSERT INTO users (name, phone, email, role) VALUES ($1, $2, $3, 'admin') RETURNING id, name, phone, email, role`,
+        `INSERT INTO users (name, phone, email, role) VALUES ($1, $2, $3, 'school_admin') RETURNING id, name, phone, email, role`,
         [data.name, data.phone, data.email],
       );
       await client.query(`SET search_path TO public`);
