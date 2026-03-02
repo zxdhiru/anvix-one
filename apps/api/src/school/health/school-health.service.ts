@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-interface HealthCheckResult {
+export interface HealthCheckResult {
   status: string;
   system: string;
   timestamp: string;

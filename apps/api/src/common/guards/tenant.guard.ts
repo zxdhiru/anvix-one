@@ -16,7 +16,7 @@ export class TenantGuard implements CanActivate {
     }
 
     // Attach tenantId to request for downstream use
-    (request as Record<string, unknown>)['tenantId'] = tenantId;
+    (request as unknown as Record<string, unknown>)['tenantId'] = tenantId;
 
     return true;
   }
