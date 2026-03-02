@@ -2,6 +2,9 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
 import Razorpay from 'razorpay';
+import type { Subscriptions } from 'razorpay/dist/types/subscriptions';
+import type { Plans } from 'razorpay/dist/types/plans';
+import type { Customers } from 'razorpay/dist/types/customers';
 import * as crypto from 'crypto';
 import { DatabaseService } from '../../common/database/database.service';
 import { RedisService } from '../../common/database/redis.service';
@@ -67,19 +70,20 @@ export class BillingService {
 
     try {
       // Step 1: Create or reuse a Razorpay plan
-      const razorpayPlan = await this.razorpay.plans.create({
-        period: this.mapBillingCycleToPeriod(plan.billingCycle),
-        interval: 1,
+      const { period, interval } = this.mapBillingCycleToPeriod(plan.billingCycle);
+      const razorpayPlan = (await this.razorpay.plans.create({
+        period,
+        interval,
         item: {
           name: plan.name,
           amount: plan.priceInPaise,
           currency: 'INR',
           description: plan.description ?? `${plan.name} subscription`,
         },
-      });
+      })) as Plans.RazorPayPlans;
 
       // Step 2: Create a Razorpay customer
-      const customer = await this.razorpay.customers.create({
+      const customer = (await this.razorpay.customers.create({
         name: tenant.principalName ?? tenant.name,
         email: tenant.email,
         contact: tenant.principalPhone,
@@ -87,19 +91,19 @@ export class BillingService {
           tenantId: tenant.id,
           schoolName: tenant.name,
         },
-      });
+      })) as Customers.RazorpayCustomer;
 
       // Step 3: Create a Razorpay subscription
-      const subscription = await this.razorpay.subscriptions.create({
+      const subscription = (await this.razorpay.subscriptions.create({
         plan_id: razorpayPlan.id,
-        customer_id: customer.id,
         total_count: 12, // 12 billing cycles
         customer_notify: 1,
         notes: {
           tenantId: tenant.id,
           planId: plan.id,
+          customerId: customer.id,
         },
-      });
+      } as Subscriptions.RazorpaySubscriptionCreateRequestBody)) as Subscriptions.RazorpaySubscription;
 
       // Step 4: Store Razorpay IDs
       await this.db
@@ -278,17 +282,20 @@ export class BillingService {
     return (entity?.['id'] as string) ?? '';
   }
 
-  /** Helper: map our billing cycle to Razorpay plan period */
-  private mapBillingCycleToPeriod(billingCycle: string): 'monthly' | 'quarterly' | 'yearly' {
+  /** Helper: map our billing cycle to Razorpay plan period + interval */
+  private mapBillingCycleToPeriod(billingCycle: string): {
+    period: 'daily' | 'weekly' | 'monthly' | 'yearly';
+    interval: number;
+  } {
     switch (billingCycle) {
       case 'monthly':
-        return 'monthly';
+        return { period: 'monthly', interval: 1 };
       case 'quarterly':
-        return 'monthly'; // Razorpay doesn't have quarterly — use monthly with interval=3
+        return { period: 'monthly', interval: 3 };
       case 'yearly':
-        return 'yearly';
+        return { period: 'yearly', interval: 1 };
       default:
-        return 'monthly';
+        return { period: 'monthly', interval: 1 };
     }
   }
 }
