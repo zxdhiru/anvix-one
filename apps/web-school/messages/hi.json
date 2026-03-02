@@ -1,0 +1,51 @@
+{
+  "common": {
+    "appName": "Anvix One",
+    "loading": "लोड हो रहा है...",
+    "error": "कुछ गलत हो गया",
+    "retry": "पुनः प्रयास करें",
+    "save": "सहेजें",
+    "cancel": "रद्द करें",
+    "delete": "हटाएं",
+    "edit": "संपादित करें",
+    "search": "खोजें",
+    "noResults": "कोई परिणाम नहीं मिला",
+    "back": "पीछे",
+    "next": "आगे",
+    "submit": "जमा करें",
+    "close": "बंद करें",
+    "yes": "हाँ",
+    "no": "नहीं"
+  },
+  "auth": {
+    "login": "लॉगिन",
+    "logout": "लॉगआउट",
+    "phoneNumber": "फ़ोन नंबर",
+    "enterOtp": "OTP दर्ज करें",
+    "verifyOtp": "OTP सत्यापित करें",
+    "resendOtp": "OTP पुनः भेजें",
+    "invalidOtp": "अमान्य OTP। कृपया पुनः प्रयास करें।",
+    "otpSent": "आपके फ़ोन नंबर पर OTP भेजा गया",
+    "welcomeBack": "वापसी पर स्वागत है!"
+  },
+  "dashboard": {
+    "title": "डैशबोर्ड",
+    "welcome": "स्वागत है, {name}",
+    "totalStudents": "कुल छात्र",
+    "totalTeachers": "कुल शिक्षक",
+    "attendance": "उपस्थिति",
+    "feeCollection": "शुल्क संग्रह",
+    "announcements": "सूचनाएं",
+    "upcomingEvents": "आगामी कार्यक्रम"
+  },
+  "nav": {
+    "dashboard": "डैशबोर्ड",
+    "students": "छात्र",
+    "teachers": "शिक्षक",
+    "attendance": "उपस्थिति",
+    "fees": "शुल्क",
+    "exams": "परीक्षा",
+    "timetable": "समय सारणी",
+    "settings": "सेटिंग्स"
+  }
+}

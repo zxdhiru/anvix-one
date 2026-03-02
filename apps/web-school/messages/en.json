@@ -1,0 +1,51 @@
+{
+  "common": {
+    "appName": "Anvix One",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "noResults": "No results found",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "phoneNumber": "Phone Number",
+    "enterOtp": "Enter OTP",
+    "verifyOtp": "Verify OTP",
+    "resendOtp": "Resend OTP",
+    "invalidOtp": "Invalid OTP. Please try again.",
+    "otpSent": "OTP sent to your phone number",
+    "welcomeBack": "Welcome back!"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {name}",
+    "totalStudents": "Total Students",
+    "totalTeachers": "Total Teachers",
+    "attendance": "Attendance",
+    "feeCollection": "Fee Collection",
+    "announcements": "Announcements",
+    "upcomingEvents": "Upcoming Events"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "students": "Students",
+    "teachers": "Teachers",
+    "attendance": "Attendance",
+    "fees": "Fees",
+    "exams": "Exams",
+    "timetable": "Timetable",
+    "settings": "Settings"
+  }
+}
