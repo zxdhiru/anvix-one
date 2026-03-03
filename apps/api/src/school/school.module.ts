@@ -8,6 +8,7 @@ import { AcademicsModule } from './academics/academics.module';
 import { StudentsModule } from './students/students.module';
 import { TeachersModule } from './teachers/teachers.module';
 import { GuardiansModule } from './guardians/guardians.module';
+import { FeesModule } from './fees/fees.module';
 
 /**
  * School System module.
@@ -25,6 +26,7 @@ import { GuardiansModule } from './guardians/guardians.module';
     StudentsModule,
     TeachersModule,
     GuardiansModule,
+    FeesModule,
   ],
   controllers: [SchoolHealthController, SchoolGuardedController],
   providers: [SchoolHealthService],
