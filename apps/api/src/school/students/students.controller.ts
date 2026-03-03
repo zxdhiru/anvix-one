@@ -47,6 +47,19 @@ export class StudentsController {
     });
   }
 
+  @Get('next-roll-number')
+  @Roles('school_admin')
+  async getNextRollNumber(
+    @Query('classId') classId: string,
+    @Query('sectionId') sectionId: string,
+  ) {
+    if (!classId || !sectionId) {
+      throw new BadRequestException('classId and sectionId are required');
+    }
+    const rollNumber = await this.studentsService.nextRollNumber(classId, sectionId);
+    return { rollNumber };
+  }
+
   @Get(':id')
   @Roles('school_admin', 'vice_principal', 'teacher')
   findOne(@Param('id') id: string) {
@@ -158,23 +171,6 @@ export class StudentsController {
     @Body() body: { newClassId: string; newSectionId: string },
   ) {
     return this.studentsService.promoteStudent(studentId, body.newClassId, body.newSectionId);
-  }
-
-  // =========================================
-  // Next roll number
-  // =========================================
-
-  @Get('next-roll-number')
-  @Roles('school_admin')
-  async getNextRollNumber(
-    @Query('classId') classId: string,
-    @Query('sectionId') sectionId: string,
-  ) {
-    if (!classId || !sectionId) {
-      throw new BadRequestException('classId and sectionId are required');
-    }
-    const rollNumber = await this.studentsService.nextRollNumber(classId, sectionId);
-    return { rollNumber };
   }
 
   // =========================================

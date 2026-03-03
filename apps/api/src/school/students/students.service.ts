@@ -418,11 +418,14 @@ export class StudentsService {
 
   private async generateAdmissionNumber(): Promise<string> {
     const year = new Date().getFullYear();
-    const { rows } = await this.tc.query<{ count: string }>(
-      `SELECT COUNT(*)::text as count FROM students`,
+    const prefix = `ADM${year}`;
+    const { rows } = await this.tc.query<{ max_num: string | null }>(
+      `SELECT MAX(SUBSTRING(admission_number FROM '\\d{4}$')::int)::text AS max_num
+       FROM students WHERE admission_number LIKE $1`,
+      [`${prefix}%`],
     );
-    const seq = parseInt(rows[0].count, 10) + 1;
-    return `ADM${year}${String(seq).padStart(4, '0')}`;
+    const seq = (parseInt(rows[0]?.max_num ?? '0', 10) || 0) + 1;
+    return `${prefix}${String(seq).padStart(4, '0')}`;
   }
 
   private async recordClassHistory(
