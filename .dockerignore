@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+**/dist
+**/.next
+**/.turbo
+
+# Git
+.git
+.gitignore
+
+# CI/CD & Infra
+.github
+infra
+
+# IDE
+.vscode
+.idea
+**/*.swp
+**/*.swo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Frontend apps (not needed for API build)
+apps/web-admin/.next
+apps/web-school/.next
+apps/web-marketing/.next
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+**/test
+**/tests
+**/coverage
+
+# Documentation
+*.md
+LICENSE

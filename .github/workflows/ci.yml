@@ -1,53 +1,154 @@
+# ============================================================================
+# CI Pipeline — Anvix One Monorepo
+# ============================================================================
+# Runs on every PR and push to main/develop.
+# Cost optimized: path-based filtering + Turborepo remote cache + concurrency.
+# ============================================================================
+
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
-  lint-and-typecheck:
-    name: Lint & Type Check
+  # --------------------------------------------------------------------------
+  # Detect which apps/packages changed — skip unnecessary work
+  # --------------------------------------------------------------------------
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web-admin: ${{ steps.filter.outputs.web-admin }}
+      web-school: ${{ steps.filter.outputs.web-school }}
+      web-marketing: ${{ steps.filter.outputs.web-marketing }}
+      packages: ${{ steps.filter.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'packages/**'
+            web-admin:
+              - 'apps/web-admin/**'
+              - 'packages/ui/**'
+              - 'packages/types/**'
+            web-school:
+              - 'apps/web-school/**'
+              - 'packages/ui/**'
+              - 'packages/types/**'
+            web-marketing:
+              - 'apps/web-marketing/**'
+              - 'packages/ui/**'
+            packages:
+              - 'packages/**'
+
+  # --------------------------------------------------------------------------
+  # Quality checks — lint, type-check, test (single job, Turbo handles caching)
+  # --------------------------------------------------------------------------
+  quality:
+    name: Lint · Type Check · Test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: >
+      needs.changes.outputs.api == 'true' ||
+      needs.changes.outputs.web-admin == 'true' ||
+      needs.changes.outputs.web-school == 'true' ||
+      needs.changes.outputs.web-marketing == 'true' ||
+      needs.changes.outputs.packages == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Lint
+        run: npx turbo lint
+
+      - name: Type Check
+        run: npx turbo type-check
+
+      - name: Test
+        run: npx turbo test
+
+  # --------------------------------------------------------------------------
+  # Build API — only when API or its dependencies changed
+  # --------------------------------------------------------------------------
+  build-api:
+    name: Build API
+    runs-on: ubuntu-latest
+    needs: [changes, quality]
+    if: needs.changes.outputs.api == 'true'
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - run: npm ci
-      - run: npx turbo lint
-      - run: npx turbo type-check
+      - run: npx turbo build --filter=@anvix/api
 
-  test:
-    name: Test
+  # --------------------------------------------------------------------------
+  # Build Frontends — only when respective app changed
+  # --------------------------------------------------------------------------
+  build-web:
+    name: Build ${{ matrix.app }}
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
+    needs: [changes, quality]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: web-admin
+            filter: '@anvix/web-admin'
+            changed: web-admin
+          - app: web-school
+            filter: '@anvix/web-school'
+            changed: web-school
+          - app: web-marketing
+            filter: '@anvix/web-marketing'
+            changed: web-marketing
+    if: >
+      needs.changes.outputs.web-admin == 'true' ||
+      needs.changes.outputs.web-school == 'true' ||
+      needs.changes.outputs.web-marketing == 'true'
     steps:
       - uses: actions/checkout@v4
+        if: needs.changes.outputs[matrix.changed] == 'true'
 
       - uses: actions/setup-node@v4
+        if: needs.changes.outputs[matrix.changed] == 'true'
         with:
-          node-version: 22
-          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - run: npm ci
-      - run: npx turbo test
+        if: needs.changes.outputs[matrix.changed] == 'true'
 
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-      - run: npx turbo build
+      - run: npx turbo build --filter=${{ matrix.filter }}
+        if: needs.changes.outputs[matrix.changed] == 'true'

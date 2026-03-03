@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd ../.. && npx turbo build --filter=@anvix/web-school",
+  "installCommand": "cd ../.. && npm ci",
+  "framework": "nextjs",
+  "ignoreCommand": "npx turbo-ignore @anvix/web-school"
+}

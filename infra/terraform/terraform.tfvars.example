@@ -1,0 +1,8 @@
+# ============================================================================
+# Production environment
+# ============================================================================
+
+aws_region  = "ap-south-1"
+environment = "production"
+github_org  = "your-github-org" # TODO: Replace with your GitHub org/username
+github_repo = "anvix-one"
