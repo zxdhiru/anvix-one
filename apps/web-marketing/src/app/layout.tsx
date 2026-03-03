@@ -1,21 +1,24 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
 export const metadata: Metadata = {
-  title: 'Anvix One — School Management Made Simple',
+  title: 'Anvix One — Modern School Management for India',
   description:
-    'Complete school management platform for Indian schools. Manage students, teachers, fees, exams, and more.',
+    'The complete school management platform built for Indian schools. Students, teachers, fees, exams — all in one place. Start free today.',
+  keywords: [
+    'school management',
+    'ERP',
+    'India',
+    'school software',
+    'student management',
+    'fee management',
+  ],
+  openGraph: {
+    title: 'Anvix One — Modern School Management for India',
+    description:
+      'The complete school management platform built for Indian schools. Start free today.',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({
@@ -25,7 +28,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+          rel="stylesheet"
+        />
+        <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
