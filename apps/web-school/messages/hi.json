@@ -42,7 +42,10 @@
   },
   "nav": {
     "dashboard": "डैशबोर्ड",
+    "myChildren": "मेरे बच्चे",
     "students": "छात्र",
+    "admission": "प्रवेश",
+    "classes": "कक्षाएं",
     "teachers": "शिक्षक",
     "attendance": "उपस्थिति",
     "fees": "शुल्क",

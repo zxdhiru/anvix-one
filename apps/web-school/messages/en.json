@@ -42,7 +42,10 @@
   },
   "nav": {
     "dashboard": "Dashboard",
+    "myChildren": "My Children",
     "students": "Students",
+    "admission": "Admission",
+    "classes": "Classes",
     "teachers": "Teachers",
     "attendance": "Attendance",
     "fees": "Fees",

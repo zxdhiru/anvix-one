@@ -6,6 +6,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { AuthProvider } from '@/lib/auth';
+import { Button } from '@anvix/ui/components/ui/button';
+import { Input } from '@anvix/ui/components/ui/input';
+import { Label } from '@anvix/ui/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@anvix/ui/components/ui/card';
+import { Badge } from '@anvix/ui/components/ui/badge';
+import { School, Mail, KeyRound, ArrowLeft, Loader2 } from 'lucide-react';
 
 type Step = 'email' | 'otp';
 
@@ -22,7 +34,6 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Get tenant slug from query param, localStorage, or fallback
   const [tenantSlug, setTenantSlugLocal] = useState('demo-school');
 
   useEffect(() => {
@@ -40,7 +51,6 @@ function LoginForm() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       await apiClient('/school/auth/send-otp', {
         method: 'POST',
@@ -59,7 +69,6 @@ function LoginForm() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const data = (await apiClient('/school/auth/verify-otp', {
         method: 'POST',
@@ -69,11 +78,11 @@ function LoginForm() {
         token: string;
         user: { id: string; name: string; phone: string; email: string | null; role: string };
       };
-
       authLogin(
         data.token,
         {
           userId: data.user.id,
+          name: data.user.name,
           phone: data.user.phone || data.user.email || '',
           role: data.user.role,
           tenantSchema: `tenant_${tenantSlug.replace(/[^a-z0-9_]/g, '_')}`,
@@ -89,95 +98,145 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{common('appName')}</h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('login')}</p>
-          {tenantSlug && (
-            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-              School: <span className="font-medium">{tenantSlug}</span>
-            </p>
-          )}
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      {/* Subtle background pattern */}
+      <div
+        className="pointer-events-none fixed inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)',
+          backgroundSize: '32px 32px',
+        }}
+      />
+
+      <div className="relative w-full max-w-[400px] page-fade-in">
+        {/* Brand */}
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+            <School className="size-6 text-primary" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-lg font-semibold tracking-tight">{common('appName')}</h1>
+            {tenantSlug && (
+              <Badge variant="secondary" className="mt-1.5 text-[10px] uppercase tracking-wider">
+                {tenantSlug}
+              </Badge>
+            )}
+          </div>
         </div>
 
-        {error && (
-          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">
-            {error}
-          </div>
-        )}
+        <Card className="border-border/60 shadow-lg shadow-black/[0.03]">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">
+              {step === 'email' ? t('login') : t('enterOtp')}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {step === 'email' ? (
+                'Enter your registered email to receive a one-time code'
+              ) : (
+                <>
+                  Code sent to <span className="font-medium text-foreground">{email}</span>
+                </>
+              )}
+            </CardDescription>
+          </CardHeader>
 
-        {step === 'email' ? (
-          <form onSubmit={handleSendOtp} className="space-y-4">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                {t('email')}
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@school.com"
-                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:ring-blue-900"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading || !email.includes('@')}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? common('loading') : t('sendOtp')}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {t('otpSent')} <strong>{email}</strong>
-            </p>
-            <div>
-              <label
-                htmlFor="otp"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                {t('enterOtp')}
-              </label>
-              <input
-                id="otp"
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                placeholder="000000"
-                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-center text-2xl tracking-[0.5em] text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:ring-blue-900"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading || otp.length !== 6}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? common('loading') : t('verifyOtp')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStep('email');
-                setOtp('');
-                setError('');
-              }}
-              className="w-full text-sm text-blue-600 hover:underline dark:text-blue-400"
-            >
-              {t('resendOtp')}
-            </button>
-          </form>
-        )}
+          <CardContent>
+            {error && (
+              <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-xs text-destructive">
+                {error}
+              </div>
+            )}
+
+            {step === 'email' ? (
+              <form onSubmit={handleSendOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-xs font-medium">
+                    {t('email')}
+                  </Label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@school.com"
+                      className="pl-10 h-10"
+                      required
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading || !email.includes('@')}
+                  className="w-full h-10"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> Sending...
+                    </>
+                  ) : (
+                    t('sendOtp')
+                  )}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="otp" className="text-xs font-medium">
+                    {t('enterOtp')}
+                  </Label>
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="otp"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      autoFocus={true}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000000"
+                      className="pl-10 h-10 text-center text-lg tracking-[0.4em] font-mono"
+                      required
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading || otp.length !== 6}
+                  className="w-full h-10"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> Verifying...
+                    </>
+                  ) : (
+                    t('verifyOtp')
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setStep('email');
+                    setOtp('');
+                    setError('');
+                  }}
+                  className="w-full text-xs text-muted-foreground"
+                >
+                  <ArrowLeft className="size-3" />
+                  {t('resendOtp')}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+
+        <p className="mt-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
+          Powered by Anvix One
+        </p>
       </div>
     </div>
   );

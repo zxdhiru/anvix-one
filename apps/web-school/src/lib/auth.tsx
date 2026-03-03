@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 
 interface User {
   userId: string;
+  name: string;
   phone: string;
   role: string;
   tenantSchema: string;
