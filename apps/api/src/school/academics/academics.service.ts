@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { TenantConnectionService } from '../../common/database/tenant-connection.service';
 
 // =========================================
@@ -252,6 +252,56 @@ export class AcademicsService {
     return rows[0];
   }
 
+  async updateClass(
+    id: string,
+    data: {
+      name?: string;
+      numericOrder?: number;
+      classTeacherId?: string | null;
+      isActive?: boolean;
+    },
+  ): Promise<ClassRow> {
+    const { rows } = await this.tc.query<ClassRow>(
+      `UPDATE classes SET
+        name = COALESCE($1, name),
+        numeric_order = COALESCE($2, numeric_order),
+        class_teacher_id = COALESCE($3, class_teacher_id),
+        is_active = COALESCE($4, is_active)
+       WHERE id = $5
+       RETURNING *`,
+      [
+        data.name ?? null,
+        data.numericOrder ?? null,
+        data.classTeacherId !== undefined ? data.classTeacherId : null,
+        data.isActive ?? null,
+        id,
+      ],
+    );
+    return rows[0];
+  }
+
+  async deleteClass(id: string): Promise<void> {
+    // Block deletion if students are still assigned (class_id is NOT NULL)
+    const { rows: studentRows } = await this.tc.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM students WHERE class_id = $1`,
+      [id],
+    );
+    if (parseInt(studentRows[0]?.count ?? '0') > 0) {
+      throw new BadRequestException(
+        `Cannot delete class: ${studentRows[0].count} student(s) are still assigned. Reassign or remove them first.`,
+      );
+    }
+
+    // Remove all FK references before deleting the class
+    await this.tc.query(`DELETE FROM teacher_subjects WHERE class_id = $1`, [id]);
+    await this.tc.query(`DELETE FROM fee_structures WHERE class_id = $1`, [id]);
+    await this.tc.query(`DELETE FROM student_class_history WHERE class_id = $1`, [id]);
+    await this.tc.query(`DELETE FROM class_subjects WHERE class_id = $1`, [id]);
+    await this.tc.query(`DELETE FROM sections WHERE class_id = $1`, [id]);
+    await this.tc.query(`DELETE FROM classes WHERE id = $1`, [id]);
+    this.logger.log(`Deleted class: ${id}`);
+  }
+
   /**
    * Bulk-create standard Indian school classes (Nursery → Class 12) with default sections.
    */
@@ -307,6 +357,48 @@ export class AcademicsService {
       [data.classId, data.name, data.capacity ?? null],
     );
     return rows[0];
+  }
+
+  async updateSection(
+    id: string,
+    data: {
+      name?: string;
+      capacity?: number | null;
+      isActive?: boolean;
+    },
+  ): Promise<SectionRow> {
+    const { rows } = await this.tc.query<SectionRow>(
+      `UPDATE sections SET
+        name = COALESCE($1, name),
+        capacity = COALESCE($2, capacity),
+        is_active = COALESCE($3, is_active)
+       WHERE id = $4
+       RETURNING *`,
+      [
+        data.name ?? null,
+        data.capacity !== undefined ? data.capacity : null,
+        data.isActive ?? null,
+        id,
+      ],
+    );
+    return rows[0];
+  }
+
+  async deleteSection(id: string): Promise<void> {
+    // Block deletion if students are still in this section
+    const { rows: studentRows } = await this.tc.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM students WHERE section_id = $1`,
+      [id],
+    );
+    if (parseInt(studentRows[0]?.count ?? '0') > 0) {
+      throw new BadRequestException(
+        `Cannot delete section: ${studentRows[0].count} student(s) are still assigned. Reassign or remove them first.`,
+      );
+    }
+
+    await this.tc.query(`DELETE FROM student_class_history WHERE section_id = $1`, [id]);
+    await this.tc.query(`DELETE FROM sections WHERE id = $1`, [id]);
+    this.logger.log(`Deleted section: ${id}`);
   }
 
   // =========================================

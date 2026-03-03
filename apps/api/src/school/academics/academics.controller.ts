@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -104,6 +104,27 @@ export class AcademicsController {
     return this.academicsService.createClass(body);
   }
 
+  @Put('classes/:id')
+  @Roles('school_admin')
+  updateClass(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      numericOrder?: number;
+      classTeacherId?: string | null;
+      isActive?: boolean;
+    },
+  ) {
+    return this.academicsService.updateClass(id, body);
+  }
+
+  @Delete('classes/:id')
+  @Roles('school_admin')
+  deleteClass(@Param('id') id: string) {
+    return this.academicsService.deleteClass(id);
+  }
+
   @Post('classes/seed')
   @Roles('school_admin')
   seedDefaultClasses(@Body() body: { academicYearId: string }) {
@@ -123,6 +144,26 @@ export class AcademicsController {
   @Roles('school_admin')
   createSection(@Body() body: { classId: string; name: string; capacity?: number }) {
     return this.academicsService.createSection(body);
+  }
+
+  @Put('sections/:id')
+  @Roles('school_admin')
+  updateSection(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      capacity?: number | null;
+      isActive?: boolean;
+    },
+  ) {
+    return this.academicsService.updateSection(id, body);
+  }
+
+  @Delete('sections/:id')
+  @Roles('school_admin')
+  deleteSection(@Param('id') id: string) {
+    return this.academicsService.deleteSection(id);
   }
 
   // =========================================
