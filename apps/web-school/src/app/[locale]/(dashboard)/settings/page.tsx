@@ -102,15 +102,16 @@ export default function SettingsPage() {
       ]);
 
       if (profileData) {
-        setProfile(profileData);
+        const p = profileData as SchoolProfile;
+        setProfile(p);
         setProfileForm({
-          name: profileData.name ?? '',
-          address: profileData.address ?? '',
-          board: profileData.board ?? '',
-          phone: profileData.phone ?? '',
-          email: profileData.email ?? '',
-          website: profileData.website ?? '',
-          establishedYear: profileData.establishedYear ?? null,
+          name: p.name ?? '',
+          address: p.address ?? '',
+          board: p.board ?? '',
+          phone: p.phone ?? '',
+          email: p.email ?? '',
+          website: p.website ?? '',
+          establishedYear: p.establishedYear ?? null,
         });
       }
       setAcademicYears(Array.isArray(yearData) ? yearData : []);
