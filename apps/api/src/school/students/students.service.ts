@@ -11,6 +11,8 @@ export interface StudentRow {
   category: string | null;
   religion: string | null;
   aadhaar_number: string | null;
+  phone: string | null;
+  email: string | null;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -22,6 +24,9 @@ export interface StudentRow {
   is_active: boolean;
   photo_url: string | null;
   created_at: string;
+  // Joined fields
+  class_name?: string | null;
+  section_name?: string | null;
 }
 
 export interface GuardianRow {
@@ -33,6 +38,7 @@ export interface GuardianRow {
   email: string | null;
   occupation: string | null;
   address: string | null;
+  whatsapp_number: string | null;
   is_primary: boolean;
   user_id: string | null;
 }
@@ -63,30 +69,46 @@ export class StudentsService {
     sectionId?: string;
     isActive?: boolean;
   }): Promise<StudentRow[]> {
-    let query = `SELECT * FROM students WHERE 1=1`;
+    let query = `
+      SELECT s.*,
+             c.name AS class_name,
+             sec.name AS section_name
+      FROM students s
+      LEFT JOIN classes c ON c.id = s.class_id
+      LEFT JOIN sections sec ON sec.id = s.section_id
+      WHERE 1=1`;
     const params: unknown[] = [];
     let idx = 1;
 
     if (filters?.classId) {
-      query += ` AND class_id = $${idx++}`;
+      query += ` AND s.class_id = $${idx++}`;
       params.push(filters.classId);
     }
     if (filters?.sectionId) {
-      query += ` AND section_id = $${idx++}`;
+      query += ` AND s.section_id = $${idx++}`;
       params.push(filters.sectionId);
     }
     if (filters?.isActive !== undefined) {
-      query += ` AND is_active = $${idx++}`;
+      query += ` AND s.is_active = $${idx++}`;
       params.push(filters.isActive);
     }
 
-    query += ` ORDER BY roll_number, name`;
+    query += ` ORDER BY s.roll_number, s.name`;
     const { rows } = await this.tc.query<StudentRow>(query, params);
     return rows;
   }
 
   async findOne(id: string): Promise<StudentRow & { guardians: GuardianRow[] }> {
-    const { rows } = await this.tc.query<StudentRow>(`SELECT * FROM students WHERE id = $1`, [id]);
+    const { rows } = await this.tc.query<StudentRow>(
+      `SELECT s.*,
+              c.name AS class_name,
+              sec.name AS section_name
+       FROM students s
+       LEFT JOIN classes c ON c.id = s.class_id
+       LEFT JOIN sections sec ON sec.id = s.section_id
+       WHERE s.id = $1`,
+      [id],
+    );
     if (rows.length === 0) throw new NotFoundException('Student not found');
 
     const { rows: guardians } = await this.tc.query<GuardianRow>(
@@ -97,6 +119,16 @@ export class StudentsService {
     return { ...rows[0], guardians };
   }
 
+  /** Next sequential roll number for a class-section (max + 1, or 1 if none). */
+  async nextRollNumber(classId: string, sectionId: string): Promise<number> {
+    const { rows } = await this.tc.query<{ max_roll: number | null }>(
+      `SELECT MAX(roll_number) AS max_roll FROM students
+       WHERE class_id = $1 AND section_id = $2 AND is_active = true`,
+      [classId, sectionId],
+    );
+    return (rows[0]?.max_roll ?? 0) + 1;
+  }
+
   async create(data: {
     name: string;
     dateOfBirth: string;
@@ -105,6 +137,8 @@ export class StudentsService {
     category?: string;
     religion?: string;
     aadhaarNumber?: string;
+    phone?: string;
+    email?: string;
     address?: string;
     city?: string;
     state?: string;
@@ -121,13 +155,17 @@ export class StudentsService {
       occupation?: string;
       address?: string;
       isPrimary?: boolean;
+      whatsappNumber?: string;
     }>;
   }): Promise<StudentRow> {
     const admissionNumber = await this.generateAdmissionNumber();
 
+    // Auto-assign roll number if not provided
+    const rollNumber = data.rollNumber ?? (await this.nextRollNumber(data.classId, data.sectionId));
+
     const { rows } = await this.tc.query<StudentRow>(
-      `INSERT INTO students (admission_number, name, date_of_birth, gender, blood_group, category, religion, aadhaar_number, address, city, state, pincode, class_id, section_id, roll_number, admission_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      `INSERT INTO students (admission_number, name, date_of_birth, gender, blood_group, category, religion, aadhaar_number, phone, email, address, city, state, pincode, class_id, section_id, roll_number, admission_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING *`,
       [
         admissionNumber,
@@ -138,13 +176,15 @@ export class StudentsService {
         data.category ?? null,
         data.religion ?? null,
         data.aadhaarNumber ?? null,
+        data.phone ?? null,
+        data.email ?? null,
         data.address ?? null,
         data.city ?? null,
         data.state ?? null,
         data.pincode ?? null,
         data.classId,
         data.sectionId,
-        data.rollNumber ?? null,
+        rollNumber,
         data.admissionDate ?? new Date().toISOString().slice(0, 10),
       ],
     );
@@ -175,6 +215,8 @@ export class StudentsService {
       category: string;
       religion: string;
       aadhaarNumber: string;
+      phone: string;
+      email: string;
       address: string;
       city: string;
       state: string;
@@ -197,6 +239,8 @@ export class StudentsService {
       category: 'category',
       religion: 'religion',
       aadhaarNumber: 'aadhaar_number',
+      phone: 'phone',
+      email: 'email',
       address: 'address',
       city: 'city',
       state: 'state',
@@ -246,11 +290,12 @@ export class StudentsService {
       occupation?: string;
       address?: string;
       isPrimary?: boolean;
+      whatsappNumber?: string;
     },
   ): Promise<GuardianRow> {
     const { rows } = await this.tc.query<GuardianRow>(
-      `INSERT INTO student_guardians (student_id, name, relation, phone, email, occupation, address, is_primary)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      `INSERT INTO student_guardians (student_id, name, relation, phone, email, occupation, address, is_primary, whatsapp_number)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
       [
         studentId,
         data.name,
@@ -260,6 +305,7 @@ export class StudentsService {
         data.occupation ?? null,
         data.address ?? null,
         data.isPrimary ?? false,
+        data.whatsappNumber ?? null,
       ],
     );
 
