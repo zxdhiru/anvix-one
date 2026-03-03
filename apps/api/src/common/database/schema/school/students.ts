@@ -25,6 +25,8 @@ export const students = pgTable('students', {
   religion: varchar('religion', { length: 30 }),
   nationality: varchar('nationality', { length: 30 }).default('Indian'),
   aadhaarNumber: varchar('aadhaar_number', { length: 12 }),
+  phone: varchar('phone', { length: 15 }),
+  email: varchar('email', { length: 255 }),
   address: text('address'),
   city: varchar('city', { length: 100 }),
   state: varchar('state', { length: 100 }),
@@ -57,6 +59,7 @@ export const studentGuardians = pgTable('student_guardians', {
   email: varchar('email', { length: 255 }),
   occupation: varchar('occupation', { length: 100 }),
   address: text('address'),
+  whatsappNumber: varchar('whatsapp_number', { length: 15 }),
   isPrimary: boolean('is_primary').notNull().default(false), // primary contact
   userId: uuid('user_id'), // linked to users table when parent has portal access
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
