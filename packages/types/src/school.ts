@@ -149,6 +149,8 @@ export interface Student {
   category?: string;
   religion?: string;
   aadhaarNumber?: string;
+  phone?: string;
+  email?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -173,6 +175,7 @@ export interface StudentGuardian {
   address?: string;
   isPrimary: boolean;
   userId?: string;
+  whatsappNumber?: string;
 }
 
 export interface StudentClassHistory {
@@ -214,4 +217,93 @@ export interface TeacherSubject {
   subjectId: string;
   classId: string;
   sectionId?: string;
+}
+
+// =========================================
+// Fee Management
+// =========================================
+
+/** Fee payment status */
+export type FeeStatus = 'pending' | 'partial' | 'paid' | 'overdue' | 'waived';
+
+/** Payment mode */
+export type PaymentMode = 'cash' | 'upi' | 'card' | 'netbanking' | 'cheque' | 'dd';
+
+/** Discount type */
+export type DiscountType = 'percentage' | 'fixed';
+
+/** Discount applicability */
+export type DiscountApplicableTo = 'all' | 'category' | 'individual';
+
+export interface FeeHead {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  isRecurring: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface FeeStructure {
+  id: string;
+  name: string;
+  academicYearId: string;
+  classId: string;
+  feeHeadId: string;
+  amount: number;
+  dueDate?: string;
+  termId?: string;
+  isActive: boolean;
+  /** Joined */
+  feeHeadName?: string;
+  className?: string;
+  termName?: string;
+}
+
+export interface FeeDiscount {
+  id: string;
+  name: string;
+  discountType: DiscountType;
+  value: number;
+  applicableTo: DiscountApplicableTo;
+  category?: string;
+  description?: string;
+  isActive: boolean;
+}
+
+export interface StudentFee {
+  id: string;
+  studentId: string;
+  feeStructureId: string;
+  discountId?: string;
+  originalAmount: number;
+  discountAmount: number;
+  netAmount: number;
+  paidAmount: number;
+  status: FeeStatus;
+  dueDate?: string;
+  /** Joined */
+  studentName?: string;
+  admissionNumber?: string;
+  className?: string;
+  feeHeadName?: string;
+}
+
+export interface FeePayment {
+  id: string;
+  studentFeeId: string;
+  studentId: string;
+  amount: number;
+  paymentMode: PaymentMode;
+  paymentDate: string;
+  transactionId?: string;
+  razorpayPaymentId?: string;
+  receiptNumber?: string;
+  remarks?: string;
+  collectedBy?: string;
+  /** Joined */
+  studentName?: string;
+  feeHeadName?: string;
+  collectedByName?: string;
 }

@@ -100,6 +100,8 @@ export const createStudentSchema = z.object({
     .string()
     .regex(/^\d{12}$/, 'Aadhaar must be 12 digits')
     .optional(),
+  phone: indianPhoneSchema.optional(),
+  email: z.string().email().optional(),
   address: z.string().max(500).optional(),
   city: z.string().max(100).optional(),
   state: z.string().max(100).optional(),
@@ -121,6 +123,7 @@ export const createStudentSchema = z.object({
         occupation: z.string().max(100).optional(),
         address: z.string().max(500).optional(),
         isPrimary: z.boolean().optional(),
+        whatsappNumber: indianPhoneSchema.optional(),
       }),
     )
     .min(1, 'At least one guardian is required'),
@@ -162,6 +165,52 @@ export const assignTeacherSubjectSchema = z.object({
   subjectId: z.string().uuid(),
   classId: z.string().uuid(),
   sectionId: z.string().uuid().optional(),
+});
+
+// =========================================
+// Fee Management
+// =========================================
+
+export const createFeeHeadSchema = z.object({
+  name: z.string().min(2).max(100),
+  code: z.string().max(20).optional(),
+  description: z.string().max(500).optional(),
+  isRecurring: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+});
+
+export const createFeeStructureSchema = z.object({
+  name: z.string().min(2).max(100),
+  academicYearId: z.string().uuid(),
+  classId: z.string().uuid(),
+  feeHeadId: z.string().uuid(),
+  amount: z.number().int().min(0), // in paise
+  dueDate: z.string().optional(),
+  termId: z.string().uuid().optional(),
+});
+
+export const createFeeDiscountSchema = z.object({
+  name: z.string().min(2).max(100),
+  discountType: z.enum(['percentage', 'fixed']),
+  value: z.number().int().min(0),
+  applicableTo: z.enum(['all', 'category', 'individual']).optional(),
+  category: z.string().max(30).optional(),
+  description: z.string().max(500).optional(),
+});
+
+export const assignFeesToClassSchema = z.object({
+  classId: z.string().uuid(),
+  academicYearId: z.string().uuid(),
+  feeStructureIds: z.array(z.string().uuid()).optional(),
+});
+
+export const collectFeePaymentSchema = z.object({
+  studentFeeId: z.string().uuid(),
+  amount: z.number().int().min(1),
+  paymentMode: z.enum(['cash', 'upi', 'card', 'netbanking', 'cheque', 'dd']),
+  paymentDate: z.string().optional(),
+  transactionId: z.string().max(100).optional(),
+  remarks: z.string().max(500).optional(),
 });
 
 // =========================================
