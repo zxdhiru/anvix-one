@@ -25,6 +25,31 @@ import type { SubscriptionStatusType } from '../../common/database/schema/platfo
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 
+  /* ─── Public endpoints ─── */
+
+  /**
+   * GET /api/platform/tenants/by-slug/:slug
+   * Public — used by web-school middleware to validate subdomain tenant.
+   * Returns { exists, tenant } with minimal data (no sensitive fields).
+   */
+  @Get('by-slug/:slug')
+  async findBySlug(@Param('slug') slug: string) {
+    try {
+      const tenant = await this.tenantsService.findBySlug(slug);
+      return {
+        exists: true,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+          subscriptionStatus: tenant.subscriptionStatus,
+        },
+      };
+    } catch {
+      return { exists: false, tenant: null };
+    }
+  }
+
   /* ─── Self-service management (OTP-based auth) ─── */
 
   @Post('send-otp')

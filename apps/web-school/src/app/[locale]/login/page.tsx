@@ -34,16 +34,28 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [tenantSlug, setTenantSlugLocal] = useState('demo-school');
+  const [tenantSlug, setTenantSlugLocal] = useState('');
 
   useEffect(() => {
+    // Priority: subdomain > query param > localStorage
+    const hostname = window.location.hostname;
+    const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN || 'anvix.app';
+    let subdomainSlug: string | null = null;
+
+    if (hostname.endsWith(`.${appDomain}`)) {
+      subdomainSlug = hostname.replace(`.${appDomain}`, '');
+    } else if (hostname.endsWith('.localhost') || hostname.match(/^[^.]+\.localhost$/)) {
+      const part = hostname.split('.')[0];
+      if (part !== 'localhost') subdomainSlug = part;
+    }
+
     const fromQuery = searchParams.get('school');
     const fromStorage = localStorage.getItem('anvix_tenant_slug');
-    if (fromQuery) {
-      setTenantSlugLocal(fromQuery);
-      setTenantSlug(fromQuery);
-    } else if (fromStorage) {
-      setTenantSlugLocal(fromStorage);
+    const resolved = subdomainSlug || fromQuery || fromStorage || '';
+
+    if (resolved) {
+      setTenantSlugLocal(resolved);
+      setTenantSlug(resolved);
     }
   }, [searchParams, setTenantSlug]);
 

@@ -26,16 +26,47 @@ const TOKEN_KEY = 'anvix_school_token';
 const USER_KEY = 'anvix_school_user';
 const SLUG_KEY = 'anvix_tenant_slug';
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+/**
+ * Extract the tenant slug from the current hostname (subdomain).
+ * e.g. "demo-school.anvix.app" → "demo-school"
+ */
+function getSlugFromSubdomain(): string | null {
+  if (typeof window === 'undefined') return null;
+  const hostname = window.location.hostname;
+  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN || 'anvix.app';
+
+  // Production: *.anvix.app
+  if (hostname.endsWith(`.${appDomain}`)) {
+    const slug = hostname.replace(`.${appDomain}`, '');
+    if (slug && slug !== 'www' && slug !== 'admin' && slug !== 'api') {
+      return slug;
+    }
+  }
+
+  // Local dev: *.localhost
+  if (hostname.endsWith('.localhost') || hostname.match(/^[^.]+\.localhost$/)) {
+    const slug = hostname.split('.')[0];
+    if (slug && slug !== 'localhost') return slug;
+  }
+
+  return null;
+}
+
+interface AuthProviderProps {
+  children: ReactNode;
+  /** Tenant slug injected from server (middleware). Takes priority over subdomain/localStorage. */
+  initialSlug?: string | null;
+}
+
+export function AuthProvider({ children, initialSlug }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [tenantSlug, setTenantSlugState] = useState<string | null>(null);
+  const [tenantSlug, setTenantSlugState] = useState<string | null>(initialSlug ?? null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const savedToken = localStorage.getItem(TOKEN_KEY);
     const savedUser = localStorage.getItem(USER_KEY);
-    const savedSlug = localStorage.getItem(SLUG_KEY);
     if (savedToken && savedUser) {
       try {
         setToken(savedToken);
@@ -45,11 +76,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(USER_KEY);
       }
     }
-    if (savedSlug) {
-      setTenantSlugState(savedSlug);
+
+    // Resolve tenant slug: server prop > subdomain > localStorage
+    if (!tenantSlug) {
+      const subdomainSlug = getSlugFromSubdomain();
+      const savedSlug = localStorage.getItem(SLUG_KEY);
+      const resolved = subdomainSlug || savedSlug;
+      if (resolved) {
+        setTenantSlugState(resolved);
+        localStorage.setItem(SLUG_KEY, resolved);
+      }
+    } else {
+      // Sync server-provided slug to localStorage
+      localStorage.setItem(SLUG_KEY, tenantSlug);
     }
+
     setIsLoading(false);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setTenantSlug = useCallback((slug: string) => {
     localStorage.setItem(SLUG_KEY, slug);
