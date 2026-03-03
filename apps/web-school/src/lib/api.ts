@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://172.28.192.1:4000/api';
 
 /** Recursively transform snake_case keys to camelCase */
 function toCamel(data: unknown): unknown {

@@ -54,9 +54,14 @@ interface Student {
   isActive: boolean;
 }
 
-interface ClassWithMeta extends ClassItem {
-  sections: Section[];
+interface SectionWithMeta extends Section {
   studentCount: number;
+}
+
+interface ClassWithMeta extends ClassItem {
+  sections: SectionWithMeta[];
+  studentCount: number;
+  totalCapacity: number | null;
 }
 
 function asArray<T>(d: unknown): T[] {
@@ -115,12 +120,22 @@ export default function ClassesPage() {
       // Fetch sections for each class in parallel
       const withMeta = await Promise.all(
         classesArr.map(async (cls) => {
-          const secs = await api(`/school/academics/classes/${cls.id}/sections`).catch(() => []);
-          const count = studentsArr.filter((s) => s.classId === cls.id && s.isActive).length;
+          const secs = asArray<Section>(
+            await api(`/school/academics/classes/${cls.id}/sections`).catch(() => []),
+          );
+          const classStudents = studentsArr.filter((s) => s.classId === cls.id && s.isActive);
+          const sectionsWithMeta: SectionWithMeta[] = secs.map((sec) => ({
+            ...sec,
+            studentCount: classStudents.filter((s) => s.sectionId === sec.id).length,
+          }));
+          const totalCapacity = secs.every((s) => s.capacity != null)
+            ? secs.reduce((sum, s) => sum + (s.capacity ?? 0), 0)
+            : null;
           return {
             ...cls,
-            sections: asArray<Section>(secs),
-            studentCount: count,
+            sections: sectionsWithMeta,
+            studentCount: classStudents.length,
+            totalCapacity,
           };
         }),
       );
@@ -268,7 +283,11 @@ export default function ClassesPage() {
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Users className="size-3.5" />
                     <span className="tabular-nums font-medium">{cls.studentCount}</span>
-                    <span>students</span>
+                    {cls.totalCapacity != null ? (
+                      <span>/ {cls.totalCapacity} enrolled</span>
+                    ) : (
+                      <span>students</span>
+                    )}
                   </div>
                 </div>
 
@@ -277,9 +296,10 @@ export default function ClassesPage() {
                     {cls.sections.map((sec) => (
                       <Badge key={sec.id} variant="outline" className="text-[11px] px-2 py-0.5">
                         {sec.name}
-                        {sec.capacity != null && (
-                          <span className="ml-1 text-muted-foreground">/{sec.capacity}</span>
-                        )}
+                        <span className="ml-1 tabular-nums text-muted-foreground">
+                          {sec.studentCount}
+                          {sec.capacity != null ? `/${sec.capacity}` : ''}
+                        </span>
                       </Badge>
                     ))}
                   </div>
