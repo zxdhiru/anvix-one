@@ -5,25 +5,39 @@ import {
   ConflictException,
   BadRequestException,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
+import * as crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../common/database/database.service';
 import { TenantDatabaseService } from '../../common/database/tenant-database.service';
+import { RedisService } from '../../common/database/redis.service';
+import { MailService } from '../../common/database/mail.service';
 import { tenants, tenantSubscriptions } from '../../common/database/schema/platform';
+import { plans } from '../../common/database/schema/platform';
 import { PlansService } from '../plans/plans.service';
 import { slugify } from '@anvix/utils';
-import { RegisterTenantDto, UpdateTenantStatusDto } from './dto';
+import { RegisterTenantDto, UpdateTenantStatusDto, ChangePlanDto } from './dto';
 import type { SubscriptionStatusType } from '../../common/database/schema/platform/tenants';
 
 @Injectable()
 export class TenantsService {
   private readonly logger = new Logger(TenantsService.name);
+  private readonly tokenSecret: string;
+  private static readonly OTP_PREFIX = 'tenant_otp:';
+  private static readonly OTP_TTL = 300; // 5 minutes
 
   constructor(
+    private readonly configService: ConfigService,
     private readonly databaseService: DatabaseService,
     private readonly tenantDatabaseService: TenantDatabaseService,
     private readonly plansService: PlansService,
-  ) {}
+    private readonly redisService: RedisService,
+    private readonly mailService: MailService,
+  ) {
+    this.tokenSecret = this.configService.get<string>('JWT_SECRET', 'dev-secret-change-me');
+  }
 
   private get db() {
     return this.databaseService.db;
@@ -300,5 +314,204 @@ export class TenantsService {
 
     this.logger.warn(`Deleted tenant: ${tenant.name} (${tenant.id})`);
     return { deleted: true, id };
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Tenant Self-Service Management (OTP-based auth for marketing site)
+     ═══════════════════════════════════════════════════════════════ */
+
+  /** Find tenant by admin email. Returns tenant + plan details. */
+  async findByEmail(email: string) {
+    const [tenant] = await this.db.select().from(tenants).where(eq(tenants.email, email)).limit(1);
+
+    if (!tenant) {
+      throw new NotFoundException('No school found with this email address');
+    }
+
+    return this.getTenantManageData(tenant.id);
+  }
+
+  /** Send OTP to the tenant admin email */
+  async sendManageOtp(email: string): Promise<{ message: string }> {
+    const [tenant] = await this.db.select().from(tenants).where(eq(tenants.email, email)).limit(1);
+
+    if (!tenant) {
+      throw new NotFoundException('No school found with this email address');
+    }
+
+    const otp = this.generateSixDigitOtp();
+    const key = `${TenantsService.OTP_PREFIX}${email}`;
+    await this.redisService.set(key, otp, TenantsService.OTP_TTL);
+
+    try {
+      await this.mailService.sendOtpEmail(email, otp);
+      this.logger.log(`Tenant manage OTP sent to ${email}`);
+    } catch {
+      this.logger.warn(`Email delivery failed, OTP for ${email}: ${otp}`);
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(`[DEV] Tenant manage OTP for ${email}: ${otp}`);
+    }
+
+    return { message: 'OTP sent to your email' };
+  }
+
+  /** Verify OTP and return a signed management token + tenant data */
+  async verifyManageOtp(email: string, otp: string) {
+    const key = `${TenantsService.OTP_PREFIX}${email}`;
+    const storedOtp = await this.redisService.get(key);
+
+    if (!storedOtp || storedOtp !== otp) {
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+
+    // OTP valid — delete it (one-time use)
+    await this.redisService.del(key);
+
+    const [tenant] = await this.db.select().from(tenants).where(eq(tenants.email, email)).limit(1);
+
+    if (!tenant) {
+      throw new NotFoundException('No school found with this email address');
+    }
+
+    // Generate a signed token for subsequent requests
+    const token = this.generateManageToken(tenant.id, email);
+    const data = await this.getTenantManageData(tenant.id);
+
+    this.logger.log(`Tenant manage OTP verified for ${email} (${tenant.name})`);
+
+    return { token, ...data };
+  }
+
+  /** Verify a management token and return the tenant ID */
+  verifyManageToken(token: string): { tenantId: string; email: string } | null {
+    try {
+      const [payloadB64, signature] = token.split('.');
+      if (!payloadB64 || !signature) return null;
+
+      const expectedSig = crypto
+        .createHmac('sha256', this.tokenSecret)
+        .update(payloadB64)
+        .digest('hex');
+
+      if (signature !== expectedSig) return null;
+
+      const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
+        tenantId: string;
+        email: string;
+        exp?: number;
+      };
+
+      if (payload.exp && Date.now() > payload.exp) return null;
+
+      return { tenantId: payload.tenantId, email: payload.email };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Change the plan for a tenant (upgrade/downgrade) */
+  async changePlan(tenantId: string, dto: ChangePlanDto) {
+    const tenant = await this.findOne(tenantId);
+    const newPlan = await this.plansService.findOne(dto.planId);
+
+    if (!newPlan.isActive) {
+      throw new BadRequestException('Selected plan is not available');
+    }
+
+    // Get current subscription
+    const [currentSub] = await this.db
+      .select()
+      .from(tenantSubscriptions)
+      .where(eq(tenantSubscriptions.tenantId, tenantId))
+      .limit(1);
+
+    if (!currentSub) {
+      throw new BadRequestException('No active subscription found');
+    }
+
+    if (currentSub.planId === dto.planId) {
+      throw new BadRequestException('You are already on this plan');
+    }
+
+    // Update the subscription to the new plan
+    await this.db
+      .update(tenantSubscriptions)
+      .set({
+        planId: dto.planId,
+        updatedAt: new Date(),
+        notes: `Plan changed from previous plan to ${newPlan.name}`,
+      })
+      .where(eq(tenantSubscriptions.tenantId, tenantId));
+
+    this.logger.log(`Tenant ${tenant.name} changed plan to ${newPlan.name}`);
+
+    return this.getTenantManageData(tenantId);
+  }
+
+  /** Get full tenant management data (tenant + subscription + plan) */
+  private async getTenantManageData(tenantId: string) {
+    const tenant = await this.findOne(tenantId);
+
+    const [subscription] = await this.db
+      .select()
+      .from(tenantSubscriptions)
+      .where(eq(tenantSubscriptions.tenantId, tenantId))
+      .limit(1);
+
+    let currentPlan = null;
+    if (subscription) {
+      currentPlan = await this.plansService.findOne(subscription.planId);
+    }
+
+    const allPlans = await this.plansService.findAll(true);
+
+    return {
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        board: tenant.board,
+        email: tenant.email,
+        principalName: tenant.principalName,
+        principalPhone: tenant.principalPhone,
+        subscriptionStatus: tenant.subscriptionStatus,
+        createdAt: tenant.createdAt,
+      },
+      subscription: subscription
+        ? {
+            id: subscription.id,
+            status: subscription.status,
+            planId: subscription.planId,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+            razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+          }
+        : null,
+      currentPlan,
+      availablePlans: allPlans,
+    };
+  }
+
+  /** Generate a signed management token (24h expiry) */
+  private generateManageToken(tenantId: string, email: string): string {
+    const payload = {
+      tenantId,
+      email,
+      exp: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const signature = crypto
+      .createHmac('sha256', this.tokenSecret)
+      .update(payloadB64)
+      .digest('hex');
+    return `${payloadB64}.${signature}`;
+  }
+
+  /** Generate a 6-digit OTP */
+  private generateSixDigitOtp(): string {
+    const num = crypto.randomInt(0, 1000000);
+    return String(num).padStart(6, '0');
   }
 }

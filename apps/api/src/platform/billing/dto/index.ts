@@ -1,1 +1,1 @@
-export { CreateSubscriptionDto, RazorpayWebhookDto } from './billing.dto';
+export { CreateSubscriptionDto, RegisterAndSubscribeDto, RazorpayWebhookDto } from './billing.dto';

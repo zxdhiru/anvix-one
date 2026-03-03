@@ -10,7 +10,7 @@ import {
 import type { RawBodyRequest } from '@nestjs/common';
 import { Request } from 'express';
 import { BillingService } from './billing.service';
-import { CreateSubscriptionDto } from './dto';
+import { CreateSubscriptionDto, RegisterAndSubscribeDto } from './dto';
 
 @Controller('platform/billing')
 export class BillingController {
@@ -18,7 +18,23 @@ export class BillingController {
 
   constructor(private readonly billingService: BillingService) {}
 
-  /** Create a Razorpay subscription for a tenant */
+  /**
+   * Register a school and create a Razorpay subscription in one step.
+   * Returns the subscription_id + Razorpay key for frontend Checkout.
+   *
+   * Frontend flow:
+   * 1. Collect school details → call this endpoint
+   * 2. Get back { subscriptionId, razorpayKeyId, ... }
+   * 3. Open Razorpay Checkout with subscription_id
+   * 4. User completes UPI autopay setup
+   * 5. Webhook fires subscription.activated → tenant is provisioned
+   */
+  @Post('register-and-subscribe')
+  registerAndSubscribe(@Body() dto: RegisterAndSubscribeDto) {
+    return this.billingService.registerAndSubscribe(dto);
+  }
+
+  /** Create a Razorpay subscription for an existing tenant */
   @Post('subscribe')
   createSubscription(@Body() dto: CreateSubscriptionDto) {
     return this.billingService.createSubscription(dto);

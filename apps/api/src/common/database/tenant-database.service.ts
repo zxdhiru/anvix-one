@@ -159,6 +159,8 @@ const TENANT_TABLES_SQL = `
     religion VARCHAR(30),
     nationality VARCHAR(30) DEFAULT 'Indian',
     aadhaar_number VARCHAR(12),
+    phone VARCHAR(15),
+    email VARCHAR(255),
     address TEXT,
     city VARCHAR(100),
     state VARCHAR(100),
@@ -182,6 +184,7 @@ const TENANT_TABLES_SQL = `
     email VARCHAR(255),
     occupation VARCHAR(100),
     address TEXT,
+    whatsapp_number VARCHAR(15),
     is_primary BOOLEAN NOT NULL DEFAULT false,
     user_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -224,6 +227,78 @@ const TENANT_TABLES_SQL = `
     subject_id UUID NOT NULL REFERENCES subjects(id),
     class_id UUID NOT NULL REFERENCES classes(id),
     section_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- =========================================
+  -- Fee Management (Phase 4)
+  -- =========================================
+
+  CREATE TABLE IF NOT EXISTS fee_heads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(20),
+    description TEXT,
+    is_recurring BOOLEAN NOT NULL DEFAULT true,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS fee_structures (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    academic_year_id UUID NOT NULL REFERENCES academic_years(id),
+    class_id UUID NOT NULL REFERENCES classes(id),
+    fee_head_id UUID NOT NULL REFERENCES fee_heads(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL DEFAULT 0,
+    due_date DATE,
+    term_id UUID REFERENCES terms(id),
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS fee_discounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    discount_type VARCHAR(20) NOT NULL DEFAULT 'percentage',
+    value INTEGER NOT NULL DEFAULT 0,
+    applicable_to VARCHAR(30) NOT NULL DEFAULT 'all',
+    category VARCHAR(30),
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS student_fees (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    fee_structure_id UUID NOT NULL REFERENCES fee_structures(id) ON DELETE CASCADE,
+    discount_id UUID REFERENCES fee_discounts(id),
+    original_amount INTEGER NOT NULL,
+    discount_amount INTEGER NOT NULL DEFAULT 0,
+    net_amount INTEGER NOT NULL,
+    paid_amount INTEGER NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    due_date DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS fee_payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_fee_id UUID NOT NULL REFERENCES student_fees(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL,
+    payment_mode VARCHAR(30) NOT NULL DEFAULT 'cash',
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    transaction_id VARCHAR(100),
+    razorpay_payment_id VARCHAR(100),
+    receipt_number VARCHAR(30),
+    remarks TEXT,
+    collected_by UUID REFERENCES users(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
@@ -280,6 +355,16 @@ const TENANT_TABLES_SQL = `
     'classes.read', 'subjects.read', 'students.read',
     'teachers.read', 'attendance.read', 'attendance.write',
     'exams.read', 'exams.write', 'communication.read'
+  )
+  ON CONFLICT DO NOTHING;
+
+  -- Accountant permissions
+  INSERT INTO role_permissions (role_id, permission_id)
+  SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+  WHERE r.name = 'accountant' AND p.name IN (
+    'students.read', 'classes.read',
+    'fees.read', 'fees.write', 'fees.collect',
+    'reports.read'
   )
   ON CONFLICT DO NOTHING;
 

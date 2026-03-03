@@ -1,6 +1,7 @@
 import { Injectable, Logger, Scope, Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { type Request } from 'express';
+import { type PoolClient } from 'pg';
 import { DatabaseService } from './database.service';
 
 /**
@@ -12,6 +13,7 @@ import { DatabaseService } from './database.service';
 export class TenantConnectionService {
   private readonly logger = new Logger(TenantConnectionService.name);
   private schemaName: string | null = null;
+  private _txClient: PoolClient | null = null;
 
   constructor(
     @Inject(REQUEST) private readonly request: Request,
@@ -40,12 +42,19 @@ export class TenantConnectionService {
 
   /**
    * Execute a raw SQL query within the tenant's schema.
-   * Automatically sets and resets search_path.
+   * If inside a withTransaction() block, reuses the transactional client.
+   * Otherwise gets a fresh connection from the pool.
    */
   async query<T = Record<string, unknown>>(
     text: string,
     params: unknown[] = [],
   ): Promise<{ rows: T[]; rowCount: number }> {
+    // If we're inside a transaction, reuse the bound client
+    if (this._txClient) {
+      const result = await this._txClient.query(text, params);
+      return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
+    }
+
     const schema = this.resolveSchema();
 
     const pool = this.databaseService.getPool();
@@ -56,6 +65,40 @@ export class TenantConnectionService {
       await client.query(`SET search_path TO public`);
       return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
     } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Run a callback inside a database transaction.
+   * All query() calls made by any service sharing this request-scoped instance
+   * will use the same client and be part of the same transaction.
+   * On success: COMMIT. On error: ROLLBACK and re-throw.
+   */
+  async withTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    if (this._txClient) {
+      // Already inside a transaction — just run the callback (nested)
+      return fn();
+    }
+
+    const schema = this.resolveSchema();
+    const pool = this.databaseService.getPool();
+    const client = await pool.connect();
+    try {
+      await client.query(`SET search_path TO "${schema}"`);
+      await client.query('BEGIN');
+      this._txClient = client;
+      const result = await fn();
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK').catch((rollbackErr) => {
+        this.logger.error('Transaction ROLLBACK failed', rollbackErr);
+      });
+      throw err;
+    } finally {
+      this._txClient = null;
+      await client.query(`SET search_path TO public`).catch(() => {});
       client.release();
     }
   }

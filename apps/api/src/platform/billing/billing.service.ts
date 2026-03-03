@@ -11,7 +11,7 @@ import { RedisService } from '../../common/database/redis.service';
 import { tenants, tenantSubscriptions } from '../../common/database/schema/platform';
 import { TenantsService } from '../tenants/tenants.service';
 import { PlansService } from '../plans/plans.service';
-import { CreateSubscriptionDto } from './dto';
+import { CreateSubscriptionDto, RegisterAndSubscribeDto } from './dto';
 import type { SubscriptionStatusType } from '../../common/database/schema/platform/tenants';
 
 /** Redis key prefix for tenant subscription status cache (matches SubscriptionGuard) */
@@ -135,6 +135,113 @@ export class BillingService {
   }
 
   /**
+   * Register a new tenant AND create a Razorpay subscription in one step.
+   *
+   * Flow:
+   * 1. Register the tenant (pending status)
+   * 2. Create Razorpay plan + customer + subscription
+   * 3. Return subscription_id + Razorpay key so frontend can open Checkout
+   *
+   * The tenant stays in "pending" status until the webhook fires
+   * `subscription.activated` → then it gets provisioned automatically.
+   */
+  async registerAndSubscribe(dto: RegisterAndSubscribeDto) {
+    // Step 1: Register tenant (creates tenant + subscription records in pending state)
+    const { tenant, subscription } = await this.tenantsService.register({
+      schoolName: dto.schoolName,
+      board: dto.board,
+      principalName: dto.principalName,
+      principalPhone: dto.principalPhone,
+      email: dto.email,
+      planId: dto.planId,
+    });
+
+    const plan = await this.plansService.findOne(dto.planId);
+
+    try {
+      // Step 2: Create Razorpay plan
+      const { period, interval } = this.mapBillingCycleToPeriod(plan.billingCycle);
+      const razorpayPlan = (await this.razorpay.plans.create({
+        period,
+        interval,
+        item: {
+          name: plan.name,
+          amount: plan.priceInPaise,
+          currency: 'INR',
+          description: plan.description ?? `${plan.name} subscription`,
+        },
+      })) as Plans.RazorPayPlans;
+
+      // Step 3: Create Razorpay customer
+      const customer = (await this.razorpay.customers.create({
+        name: dto.principalName,
+        email: dto.email,
+        contact: dto.principalPhone,
+        notes: {
+          tenantId: tenant.id,
+          schoolName: dto.schoolName,
+        },
+      })) as Customers.RazorpayCustomer;
+
+      // Step 4: Create Razorpay subscription
+      const razorpaySubscription = (await this.razorpay.subscriptions.create({
+        plan_id: razorpayPlan.id,
+        total_count: 12,
+        customer_notify: 1,
+        notes: {
+          tenantId: tenant.id,
+          planId: plan.id,
+          customerId: customer.id,
+        },
+      } as Subscriptions.RazorpaySubscriptionCreateRequestBody)) as Subscriptions.RazorpaySubscription;
+
+      // Step 5: Store Razorpay IDs on our subscription record
+      await this.db
+        .update(tenantSubscriptions)
+        .set({
+          razorpaySubscriptionId: razorpaySubscription.id,
+          razorpayCustomerId: customer.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(tenantSubscriptions.tenantId, tenant.id));
+
+      this.logger.log(
+        `Registered tenant "${tenant.name}" and created Razorpay subscription: ${razorpaySubscription.id}`,
+      );
+
+      // Step 6: Return data for frontend Razorpay Checkout
+      const keyId = this.configService.get<string>('RAZORPAY_KEY_ID', '');
+
+      return {
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        tenantSlug: tenant.slug,
+        subscriptionId: razorpaySubscription.id,
+        razorpayKeyId: keyId,
+        amount: plan.priceInPaise,
+        planName: plan.name,
+        billingCycle: plan.billingCycle,
+        customerEmail: dto.email,
+        customerPhone: dto.principalPhone,
+        customerName: dto.principalName,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create Razorpay subscription for tenant ${tenant.id}: ${error}`);
+      // Clean up the tenant record since payment setup failed
+      try {
+        await this.db
+          .delete(tenantSubscriptions)
+          .where(eq(tenantSubscriptions.tenantId, tenant.id));
+        await this.db.delete(tenants).where(eq(tenants.id, tenant.id));
+        this.logger.log(`Cleaned up tenant ${tenant.id} after failed subscription creation`);
+      } catch (cleanupError) {
+        this.logger.error(`Failed to clean up tenant ${tenant.id}: ${cleanupError}`);
+      }
+      throw new BadRequestException('Failed to set up payment. Please try again.');
+    }
+  }
+
+  /**
    * Verify Razorpay webhook signature using HMAC SHA256.
    * Returns true if the signature is valid.
    */
@@ -155,6 +262,9 @@ export class BillingService {
     this.logger.log(`Received Razorpay webhook: ${event}`);
 
     switch (event) {
+      case 'subscription.authenticated':
+        await this.handleSubscriptionAuthenticated(payload);
+        break;
       case 'subscription.activated':
         await this.handleSubscriptionActivated(payload);
         break;
@@ -178,6 +288,18 @@ export class BillingService {
     }
 
     return { received: true };
+  }
+
+  /** Subscription authenticated — UPI autopay mandate authorized (first auth before activation) */
+  private async handleSubscriptionAuthenticated(payload: Record<string, unknown>) {
+    const subscriptionId = this.extractSubscriptionId(payload);
+    const tenantSub = await this.findSubscriptionByRazorpayId(subscriptionId);
+    if (!tenantSub) return;
+
+    // Mark as authenticated — the activation event will handle provisioning
+    this.logger.log(
+      `Subscription authenticated for tenant ${tenantSub.tenantId} (awaiting activation)`,
+    );
   }
 
   /** Subscription activated → provision tenant */
