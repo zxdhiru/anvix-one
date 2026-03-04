@@ -7,6 +7,9 @@ dist/
 out/
 build/
 
+# drizzle
+drizzle/
+
 # Turbo
 .turbo/
 

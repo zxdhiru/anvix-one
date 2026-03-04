@@ -260,6 +260,8 @@ export class BillingService {
   }
   async handleWebhook(event: string, payload: Record<string, unknown>) {
     this.logger.log(`Received Razorpay webhook: ${event}`);
+    // Log full Razorpay data for debugging
+    console.log('Razorpay webhook payload:', JSON.stringify(payload, null, 2));
 
     switch (event) {
       case 'subscription.authenticated':
