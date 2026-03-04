@@ -74,6 +74,7 @@ async function validateTenant(slug: string): Promise<TenantInfo | null> {
     }
 
     const body = await res.json();
+    console.log(`[middleware] Body:`, JSON.stringify(body));
     const tenant: TenantInfo | null = body.exists ? body.tenant : null;
 
     tenantCache.set(slug, { data: tenant, expiry: Date.now() + CACHE_TTL });
