@@ -26,6 +26,7 @@
     "db:seed:student": "ts-node -r tsconfig-paths/register src/seed-student.ts"
   },
   "dependencies": {
+    "@anvix/utils": "^0.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.1",
@@ -53,6 +54,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
     "@types/nodemailer": "^7.0.11",
+    "@types/pg": "^8.18.0",
     "@types/supertest": "^6.0.2",
     "drizzle-kit": "^0.31.9",
     "eslint": "^9.18.0",
