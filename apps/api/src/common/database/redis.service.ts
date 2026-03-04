@@ -17,11 +17,12 @@ export class RedisService implements OnModuleDestroy {
     const redisUrl = this.configService.get<string>('REDIS_URL', 'redis://localhost:6379');
 
     this.client = new Redis(redisUrl, {
+      tls: redisUrl.startsWith('rediss://') ? {} : undefined, // ← add this line
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
         if (times > 5) {
           this.logger.error('Redis connection failed after 5 retries');
-          return null; // Stop retrying
+          return 5000; // ← change null to 5000 to keep retrying
         }
         return Math.min(times * 200, 2000);
       },
