@@ -54,7 +54,7 @@
     "settings": "Settings"
   },
   "setup": {
-    "title": "School Setup",
+    "title  ": "School Setup",
     "subtitle": "Let's get your school ready. This will only take a few minutes.",
     "step": "Step {current} of {total}",
     "profileTitle": "School Profile",

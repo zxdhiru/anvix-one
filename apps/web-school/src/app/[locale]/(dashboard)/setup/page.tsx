@@ -212,7 +212,7 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl py-6 page-fade-in">
+    <div className="mx-auto py-6 page-fade-in">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight">{t('title')}</h1>
