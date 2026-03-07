@@ -421,7 +421,7 @@ export default function ManageDashboardPage() {
             <h2 className="font-display font-semibold text-lg mb-4">Quick Actions</h2>
             <div className="grid sm:grid-cols-2 gap-3">
               <a
-                href={`http://${tenant.slug}.localhost:3001`}
+                href={`https://${tenant.slug}.${process.env.NEXT_PUBLIC_SCHOOL_DOMAIN!}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] hover:border-orange-200 hover:bg-orange-50/50 transition-all"
@@ -432,7 +432,7 @@ export default function ManageDashboardPage() {
                 <div>
                   <div className="text-sm font-semibold">Go to School Dashboard</div>
                   <div className="text-xs text-[var(--muted-foreground)]">
-                    {tenant.slug}.localhost:3001
+                    {tenant.slug}.{process.env.NEXT_PUBLIC_SCHOOL_DOMAIN!}
                   </div>
                 </div>
               </a>
