@@ -205,36 +205,36 @@ export default function HomePage() {
   return (
     <div className="min-h-screen">
       {/* ══════ NAV ══════ */}
-      <nav className="fixed top-0 inset-x-0 z-50 glass">
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-          <a
-            href="#"
-            className="font-display font-bold text-xl tracking-tight text-[var(--foreground)]"
-          >
-            anvix<span className="text-[var(--primary)]">.</span>one
-          </a>
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-[var(--muted-foreground)]">
-            <a href="#features" className="hover:text-[var(--foreground)] transition-colors">
-              Features
-            </a>
-            <a href="#pricing" className="hover:text-[var(--foreground)] transition-colors">
-              Pricing
-            </a>
-            <a href="#testimonials" className="hover:text-[var(--foreground)] transition-colors">
-              Stories
-            </a>
-            <a href="/manage" className="hover:text-[var(--foreground)] transition-colors">
-              Manage
-            </a>
-          </div>
-          <a
-            href="#pricing"
-            className="inline-flex items-center gap-2 bg-[var(--foreground)] text-[var(--background)] text-sm font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
-          >
-            Get Started <ArrowRight size={14} />
-          </a>
-        </div>
-      </nav>
+      <nav className="fixed top-0 inset-x-0 z-50 glass w-full overflow-hidden">
+  <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
+    <a
+      href="#"
+      className="font-display font-bold text-xl tracking-tight text-[var(--foreground)] shrink-0"
+    >
+      anvix<span className="text-[var(--primary)]">.</span>one
+    </a>
+    <div className="hidden md:flex items-center gap-8 text-sm font-medium text-[var(--muted-foreground)]">
+      <a href="#features" className="hover:text-[var(--foreground)] transition-colors">
+        Features
+      </a>
+      <a href="#pricing" className="hover:text-[var(--foreground)] transition-colors">
+        Pricing
+      </a>
+      <a href="#testimonials" className="hover:text-[var(--foreground)] transition-colors">
+        Stories
+      </a>
+      <a href="/manage" className="hover:text-[var(--foreground)] transition-colors">
+        Manage
+      </a>
+    </div>
+    <a
+      href="#pricing"
+      className="inline-flex items-center gap-2 bg-[var(--foreground)] text-[var(--background)] text-sm font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity shrink-0"
+    >
+      Get Started <ArrowRight size={14} />
+    </a>
+  </div>
+</nav>
 
       {/* ══════ HERO ══════ */}
       <section className="relative pt-40 pb-28 px-6 overflow-hidden noise">
